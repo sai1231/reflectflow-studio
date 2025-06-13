@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useCallback, useEffect, useRef } from 'react';
-import type { Step } from '@/types';
+import type { Step, NavigateStep, ClickStep, TypeStep, ScrollStep, WaitForElementStep, ActionStep, WaitForElementStepProperty, StepType } from '@/types';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { HeaderControls } from './HeaderControls';
@@ -25,7 +25,7 @@ interface ElementInfoForPopup {
 }
 
 const PANEL_WIDTH_EXPANDED = 400;
-const PANEL_WIDTH_COLLAPSED = 160; // Adjusted for 3 icons + collapse/expand button
+const PANEL_WIDTH_COLLAPSED = 160;
 const PANEL_MIN_LEFT = 16;
 const PANEL_MIN_TOP = 16;
 
@@ -64,7 +64,7 @@ const generateElementInfo = (element: HTMLElement): ElementInfoForPopup => {
 
   return {
     id: element.id || undefined,
-    cssSelector: id || cssSelector,
+    cssSelector: id || cssSelector, // Prefer ID if available for the primary selector
     xpath: xpath,
     tagName: element.tagName.toLowerCase(),
   };
@@ -94,7 +94,6 @@ export function ReflectFlowOverlay() {
   const [isDragging, setIsDragging] = useState(false);
   const [dragStartOffset, setDragStartOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
 
-  // Refs for drag handlers to access latest state
   const isDraggingRef = useRef(isDragging);
   useEffect(() => { isDraggingRef.current = isDragging; }, [isDragging]);
   const dragStartOffsetRef = useRef(dragStartOffset);
@@ -104,15 +103,14 @@ export function ReflectFlowOverlay() {
 
 
   useEffect(() => {
-    // Initialize panel position
-    if (panelPosition.left === -9999) { // Only set initial if not already set (e.g. by dragging)
+    if (panelPosition.left === -9999) {
       const initialWidth = isPanelCollapsed ? PANEL_WIDTH_COLLAPSED : PANEL_WIDTH_EXPANDED;
       setPanelPosition({
         top: PANEL_MIN_TOP,
         left: Math.max(PANEL_MIN_LEFT, window.innerWidth - initialWidth - PANEL_MIN_LEFT),
       });
     }
-  }, [isPanelCollapsed, panelPosition.left]); // Rerun if panel collapses before initial position is set
+  }, [isPanelCollapsed, panelPosition.left]);
 
 
   const handleTogglePanelCollapse = useCallback(() => {
@@ -123,13 +121,10 @@ export function ReflectFlowOverlay() {
 
         setPanelPosition(currentPos => {
             let newLeft = currentPos.left;
-            // If panel was near the right edge, try to keep its right edge aligned
-            if (currentPos.left + oldWidth >= window.innerWidth - PANEL_MIN_LEFT - 20) { // Check if right edge is close to window right edge
+            if (currentPos.left + oldWidth >= window.innerWidth - PANEL_MIN_LEFT - 20) {
                 newLeft = window.innerWidth - newWidth - PANEL_MIN_LEFT;
             }
-            
-            newLeft = Math.max(PANEL_MIN_LEFT, newLeft); // Ensure not off-screen left
-             // Ensure not off-screen right after width change
+            newLeft = Math.max(PANEL_MIN_LEFT, newLeft);
             if (newLeft + newWidth + PANEL_MIN_LEFT > window.innerWidth) {
                 newLeft = window.innerWidth - newWidth - PANEL_MIN_LEFT;
             }
@@ -146,9 +141,8 @@ export function ReflectFlowOverlay() {
     let newTop = event.clientY - dragStartOffsetRef.current.y;
     let newLeft = event.clientX - dragStartOffsetRef.current.x;
 
-    // Constrain dragging within viewport
     const panelWidth = panelCardRef.current?.offsetWidth || (isPanelCollapsed ? PANEL_WIDTH_COLLAPSED : PANEL_WIDTH_EXPANDED);
-    const panelHeight = panelCardRef.current?.offsetHeight || window.innerHeight; // Approx
+    const panelHeight = panelCardRef.current?.offsetHeight || window.innerHeight;
 
     newTop = Math.max(PANEL_MIN_TOP, Math.min(newTop, window.innerHeight - panelHeight - PANEL_MIN_TOP));
     newLeft = Math.max(PANEL_MIN_LEFT, Math.min(newLeft, window.innerWidth - panelWidth - PANEL_MIN_LEFT));
@@ -164,7 +158,7 @@ export function ReflectFlowOverlay() {
 
   const handleMouseDownDraggable = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
     if ((event.target as HTMLElement).closest('button, input, [role="button"], [role="menuitem"]')) {
-        return; // Don't drag if clicking on an interactive element within the header
+        return;
     }
     event.preventDefault();
     setIsDragging(true);
@@ -197,7 +191,7 @@ export function ReflectFlowOverlay() {
     }
   }, [isRecording, toast]);
 
-  const handleClick = useCallback((event: MouseEvent) => {
+  const recordClick = useCallback((event: MouseEvent) => {
     if (isElementSelectorActive || !isRecording || isElementContextMenuOpen) return;
 
     if (panelCardRef.current && panelCardRef.current.contains(event.target as Node)) {
@@ -210,14 +204,21 @@ export function ReflectFlowOverlay() {
     }
 
     const elementInfo = generateElementInfo(target);
-    const selector = elementInfo.id ? `#${CSS.escape(elementInfo.id)}` : elementInfo.cssSelector || 'N/A';
-    const description = `Click on ${elementInfo.tagName}${selector !== elementInfo.tagName ? ` (${selector})` : ''}`;
+    const primarySelector = elementInfo.id || elementInfo.cssSelector || elementInfo.xpath || 'N/A';
+    const selectors = [primarySelector];
+    if (elementInfo.id && elementInfo.cssSelector && elementInfo.id !== elementInfo.cssSelector) selectors.push(elementInfo.cssSelector);
+    if (elementInfo.xpath && !selectors.includes(elementInfo.xpath)) selectors.push(elementInfo.xpath);
 
-    const newStep: Step = {
+
+    const description = `Click on ${elementInfo.tagName}${primarySelector !== elementInfo.tagName ? ` (${primarySelector})` : ''}`;
+
+    const newStep: ClickStep = {
       id: String(Date.now()) + Math.random().toString(36).substring(2,7),
       type: 'click',
-      selector: selector,
+      selector: primarySelector, // For quick display
+      selectors: selectors,
       description: description,
+      // offsetX, offsetY, button, duration can be captured here if needed
     };
 
     setRecordedSteps(prevSteps => [...prevSteps, newStep]);
@@ -226,19 +227,18 @@ export function ReflectFlowOverlay() {
 
   useEffect(() => {
     if (isRecording && !isElementSelectorActive && !isElementContextMenuOpen) {
-      document.addEventListener('click', handleClick, true);
+      document.addEventListener('click', recordClick, true);
     } else {
-      document.removeEventListener('click', handleClick, true);
+      document.removeEventListener('click', recordClick, true);
     }
     return () => {
-      document.removeEventListener('click', handleClick, true);
+      document.removeEventListener('click', recordClick, true);
     };
-  }, [isRecording, handleClick, isElementSelectorActive, isElementContextMenuOpen]);
+  }, [isRecording, recordClick, isElementSelectorActive, isElementContextMenuOpen]);
 
 
   const handleMouseOver = useCallback((event: MouseEvent) => {
     if (!isElementSelectorActive || isElementContextMenuOpen || isDraggingRef.current) return;
-
     const target = event.target as HTMLElement;
 
     if (target.matches('[data-reflectflow-icon="true"]')) {
@@ -271,7 +271,6 @@ export function ReflectFlowOverlay() {
 
   const handleMouseOut = useCallback(() => {
     if (!isElementSelectorActive || isElementContextMenuOpen || isDraggingRef.current) return;
-
     if (hoverTimerRef.current) {
       clearTimeout(hoverTimerRef.current);
       hoverTimerRef.current = null;
@@ -281,16 +280,13 @@ export function ReflectFlowOverlay() {
 
   const handleInspectIconClick = useCallback((event: React.MouseEvent, pageElement: HTMLElement) => {
     event.stopPropagation();
-
     const elementInfoForMenu = highlightedElementDetails && highlightedElementDetails.element === pageElement
       ? highlightedElementDetails.info
       : generateElementInfo(pageElement);
 
     setCurrentContextMenuElementInfo(elementInfoForMenu);
-
     const iconRect = (event.currentTarget as HTMLElement).getBoundingClientRect();
     setContextMenuPosition({ top: iconRect.bottom + 5, left: iconRect.left });
-    
     setIsElementContextMenuOpen(true);
     setInspectIconTarget(null); 
     setHighlightedElementDetails(null); 
@@ -330,7 +326,6 @@ export function ReflectFlowOverlay() {
       document.removeEventListener('mouseout', handleMouseOut);
       document.removeEventListener('keydown', handleKeyDown);
       if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
-
       setHighlightedElementDetails(null);
       setInspectIconTarget(null);
       setIsElementContextMenuOpen(false); 
@@ -379,88 +374,100 @@ export function ReflectFlowOverlay() {
   }, [isElementSelectorActive, toast]);
 
   const handleCommandSelected = useCallback((command: string, targetElementInfo: ElementInfoForPopup) => {
-    const selector = targetElementInfo.id ? `#${CSS.escape(targetElementInfo.id)}` : targetElementInfo.cssSelector || targetElementInfo.xpath || 'N/A';
+    const primarySelector = targetElementInfo.id || targetElementInfo.cssSelector || targetElementInfo.xpath || 'N/A';
+    const allSelectors = [primarySelector];
+    if (targetElementInfo.id && targetElementInfo.cssSelector && targetElementInfo.id !== targetElementInfo.cssSelector && !allSelectors.includes(targetElementInfo.cssSelector)) allSelectors.push(targetElementInfo.cssSelector);
+    if (targetElementInfo.xpath && !allSelectors.includes(targetElementInfo.xpath)) allSelectors.push(targetElementInfo.xpath);
+    
     const tagName = targetElementInfo.tagName || 'element';
     let newStep: Step | null = null;
     let toastMessage = "";
     const baseId = String(Date.now()) + Math.random().toString(36).substring(2,7);
 
+    const createProperty = (name: string, expectedValue: string | boolean | number, operator?: WaitForElementStepProperty['operator']): WaitForElementStepProperty => ({ name, expectedValue, operator });
+
     switch (command) {
+      // Actions
       case 'actionClick':
-        newStep = { id: baseId, type: 'click', selector, description: `Click on ${tagName} (${selector})` };
-        toastMessage = `Click action for ${selector} added.`;
+        newStep = { id: baseId, type: 'click', selectors: allSelectors, selector: primarySelector, description: `Click on ${tagName} (${primarySelector})` } as ClickStep;
+        toastMessage = `Click action for ${primarySelector} added.`;
         break;
       case 'actionDoubleClick':
-        newStep = { id: baseId, type: 'action', selector, description: `Double Click ${tagName} (${selector})`, params: { subAction: 'doubleClick' } };
-        toastMessage = `Double Click action for ${selector} added.`;
+        newStep = { id: baseId, type: 'action', subAction: 'doubleClick', selectors: allSelectors, selector: primarySelector, description: `Double Click ${tagName} (${primarySelector})` } as ActionStep;
+        toastMessage = `Double Click action for ${primarySelector} added.`;
         break;
       case 'actionSetValue':
-        newStep = { id: baseId, type: 'type', selector, value: '', description: `Set Value in ${tagName} (${selector})` };
-        toastMessage = `Set Value action for ${selector} added. Edit to set text.`;
+        newStep = { id: baseId, type: 'type', value: '', selectors: allSelectors, selector: primarySelector, description: `Set Value in ${tagName} (${primarySelector})`, params: { operation: 'set' } } as TypeStep;
+        toastMessage = `Set Value action for ${primarySelector} added. Edit to set text.`;
         break;
       case 'actionAddValue':
-        newStep = { id: baseId, type: 'type', selector, value: '', description: `Add Value to ${tagName} (${selector})`, params: { operation: 'add' } };
-        toastMessage = `Add Value action for ${selector} added. Edit to set text.`;
+        newStep = { id: baseId, type: 'type', value: '', selectors: allSelectors, selector: primarySelector, description: `Add Value to ${tagName} (${primarySelector})`, params: { operation: 'add' } } as TypeStep;
+        toastMessage = `Add Value action for ${primarySelector} added. Edit to set text.`;
         break;
       case 'actionClearValue':
-        newStep = { id: baseId, type: 'action', selector, description: `Clear Value of ${tagName} (${selector})`, params: { subAction: 'clearValue' } };
-        toastMessage = `Clear Value action for ${selector} added.`;
+        newStep = { id: baseId, type: 'action', subAction: 'clearValue', selectors: allSelectors, selector: primarySelector, description: `Clear Value of ${tagName} (${primarySelector})` } as ActionStep;
+        toastMessage = `Clear Value action for ${primarySelector} added.`;
         break;
       case 'actionScrollIntoView':
-        newStep = { id: baseId, type: 'scroll', selector, description: `Scroll ${tagName} (${selector}) into view` };
-        toastMessage = `Scroll Into View action for ${selector} added.`;
+        newStep = { id: baseId, type: 'scroll', selectors: allSelectors, selector: primarySelector, description: `Scroll ${tagName} (${primarySelector}) into view` } as ScrollStep;
+        toastMessage = `Scroll Into View action for ${primarySelector} added.`;
         break;
       case 'actionMoveTo':
-        newStep = { id: baseId, type: 'action', selector, description: `Move to ${tagName} (${selector})`, params: { subAction: 'moveTo' } };
-        toastMessage = `Move To action for ${selector} added.`;
+        newStep = { id: baseId, type: 'action', subAction: 'moveTo', selectors: allSelectors, selector: primarySelector, description: `Move to ${tagName} (${primarySelector})` } as ActionStep;
+        toastMessage = `Move To action for ${primarySelector} added.`;
         break;
+
+      // Assertions (waitForElement)
       case 'assertIsVisible':
-        newStep = { id: baseId, type: 'assert', selector, description: `Assert ${tagName} (${selector}) is visible`, params: { assertionType: 'isVisible' } };
-        toastMessage = `Assertion (Is Visible) for ${selector} added.`;
+        newStep = { id: baseId, type: 'waitForElement', selectors: allSelectors, selector: primarySelector, description: `Assert ${tagName} (${primarySelector}) is visible`, properties: [createProperty('visible', true)] } as WaitForElementStep;
+        toastMessage = `Assertion (Is Visible) for ${primarySelector} added.`;
         break;
       case 'assertGetText':
-        newStep = { id: baseId, type: 'assert', selector, description: `Assert text of ${tagName} (${selector})`, params: { assertionType: 'getText', expectedValue: '' } };
-        toastMessage = `Assertion (Get Text) for ${selector} added. Edit to set expected value.`;
+        newStep = { id: baseId, type: 'waitForElement', selectors: allSelectors, selector: primarySelector, description: `Assert text of ${tagName} (${primarySelector})`, properties: [createProperty('textContent', '', '==')] } as WaitForElementStep;
+        toastMessage = `Assertion (Get Text) for ${primarySelector} added. Edit to set expected value.`;
         break;
       case 'assertGetAttribute':
-        newStep = { id: baseId, type: 'assert', selector, description: `Assert attribute of ${tagName} (${selector})`, params: { assertionType: 'getAttribute', attributeName: '', expectedValue: '' } };
-        toastMessage = `Assertion (Get Attribute) for ${selector} added. Edit to set attribute/value.`;
+        // Prompt user for attribute name in StepItem edit mode
+        newStep = { id: baseId, type: 'waitForElement', selectors: allSelectors, selector: primarySelector, description: `Assert attribute of ${tagName} (${primarySelector})`, properties: [createProperty('attribute:', '', '==')] } as WaitForElementStep;
+        toastMessage = `Assertion (Get Attribute) for ${primarySelector} added. Edit to set attribute name and value.`;
         break;
       case 'assertIsEnabled':
-        newStep = { id: baseId, type: 'assert', selector, description: `Assert ${tagName} (${selector}) is enabled`, params: { assertionType: 'isEnabled' } };
-        toastMessage = `Assertion (Is Enabled) for ${selector} added.`;
+        newStep = { id: baseId, type: 'waitForElement', selectors: allSelectors, selector: primarySelector, description: `Assert ${tagName} (${primarySelector}) is enabled`, properties: [createProperty('enabled', true)] } as WaitForElementStep;
+        toastMessage = `Assertion (Is Enabled) for ${primarySelector} added.`;
         break;
       case 'assertIsExisting':
-        newStep = { id: baseId, type: 'assert', selector, description: `Assert ${tagName} (${selector}) exists`, params: { assertionType: 'isExisting' } };
-        toastMessage = `Assertion (Is Existing) for ${selector} added.`;
+        newStep = { id: baseId, type: 'waitForElement', selectors: allSelectors, selector: primarySelector, description: `Assert ${tagName} (${primarySelector}) exists`, properties: [createProperty('existing', true)] } as WaitForElementStep;
+        toastMessage = `Assertion (Is Existing) for ${primarySelector} added.`;
         break;
       case 'assertGetSize':
-        newStep = { id: baseId, type: 'assert', selector, description: `Assert size of ${tagName} (${selector})`, params: { assertionType: 'getSize' } };
-        toastMessage = `Assertion (Get Size) for ${selector} added.`;
+         newStep = { id: baseId, type: 'action', subAction: 'getSize', selectors: allSelectors, selector: primarySelector, description: `Get size of ${tagName} (${primarySelector})` } as ActionStep; // Or use waitForElement with properties
+        toastMessage = `Action (Get Size) for ${primarySelector} added. (Verification TBD)`;
         break;
       case 'assertGetLocation':
-        newStep = { id: baseId, type: 'assert', selector, description: `Assert location of ${tagName} (${selector})`, params: { assertionType: 'getLocation' } };
-        toastMessage = `Assertion (Get Location) for ${selector} added.`;
+        newStep = { id: baseId, type: 'action', subAction: 'getLocation', selectors: allSelectors, selector: primarySelector, description: `Get location of ${tagName} (${primarySelector})` } as ActionStep; // Or use waitForElement
+        toastMessage = `Action (Get Location) for ${primarySelector} added. (Verification TBD)`;
         break;
+        
+      // Waits (waitForElement)
       case 'waitForVisible':
-        newStep = { id: baseId, type: 'assert', selector, description: `Wait for ${tagName} (${selector}) to be visible`, params: { waitType: 'isVisible', timeout: 5000 } };
-        toastMessage = `Wait (For Visible) for ${selector} added.`;
+        newStep = { id: baseId, type: 'waitForElement', selectors: allSelectors, selector: primarySelector, description: `Wait for ${tagName} (${primarySelector}) to be visible`, properties: [createProperty('visible', true)], timeout: 5000 } as WaitForElementStep;
+        toastMessage = `Wait (For Visible) for ${primarySelector} added.`;
         break;
       case 'waitForClickable':
-        newStep = { id: baseId, type: 'assert', selector, description: `Wait for ${tagName} (${selector}) to be clickable`, params: { waitType: 'isClickable', timeout: 5000 } };
-        toastMessage = `Wait (For Clickable) for ${selector} added.`;
+        newStep = { id: baseId, type: 'waitForElement', selectors: allSelectors, selector: primarySelector, description: `Wait for ${tagName} (${primarySelector}) to be clickable`, properties: [createProperty('clickable', true)], timeout: 5000 } as WaitForElementStep;
+        toastMessage = `Wait (For Clickable) for ${primarySelector} added.`;
         break;
       case 'waitForEnabled':
-        newStep = { id: baseId, type: 'assert', selector, description: `Wait for ${tagName} (${selector}) to be enabled`, params: { waitType: 'isEnabled', timeout: 5000 } };
-        toastMessage = `Wait (For Enabled) for ${selector} added.`;
+        newStep = { id: baseId, type: 'waitForElement', selectors: allSelectors, selector: primarySelector, description: `Wait for ${tagName} (${primarySelector}) to be enabled`, properties: [createProperty('enabled', true)], timeout: 5000 } as WaitForElementStep;
+        toastMessage = `Wait (For Enabled) for ${primarySelector} added.`;
         break;
       case 'waitForExist':
-        newStep = { id: baseId, type: 'assert', selector, description: `Wait for ${tagName} (${selector}) to exist`, params: { waitType: 'isExisting', timeout: 5000 } };
-        toastMessage = `Wait (For Exist) for ${selector} added.`;
+        newStep = { id: baseId, type: 'waitForElement', selectors: allSelectors, selector: primarySelector, description: `Wait for ${tagName} (${primarySelector}) to exist`, properties: [createProperty('existing', true)], timeout: 5000 } as WaitForElementStep;
+        toastMessage = `Wait (For Exist) for ${primarySelector} added.`;
         break;
       case 'waitForStable':
-        newStep = { id: baseId, type: 'assert', selector, description: `Wait for ${tagName} (${selector}) to be stable`, params: { waitType: 'isStable', timeout: 5000 } };
-        toastMessage = `Wait (For Stable) for ${selector} added.`;
+         newStep = { id: baseId, type: 'waitForElement', selectors: allSelectors, selector: primarySelector, description: `Wait for ${tagName} (${primarySelector}) to be stable`, properties: [createProperty('stable', true)], timeout: 5000 } as WaitForElementStep;
+        toastMessage = `Wait (For Stable) for ${primarySelector} added.`;
         break;
       default:
         toastMessage = `Unknown command: ${command}`;
@@ -477,8 +484,24 @@ export function ReflectFlowOverlay() {
 
 
   const handleSaveSession = useCallback(() => {
-    toast({ title: "Session Saved (Simulated)", description: "Actual saving logic not yet implemented." });
-  }, [toast]);
+    // This would eventually use the full recording structure including title, url, device_screen_emulation
+    // For now, it's a simulation.
+    const sessionToSave = {
+      title: "My Recorded Session",
+      description: "A recording of user interactions.",
+      url: window.location.href, // Example initial URL
+      steps: recordedSteps,
+      device_screen_emulation: { // Example device emulation data
+        width: window.innerWidth,
+        height: window.innerHeight,
+        deviceScaleFactor: window.devicePixelRatio,
+        mobile: /Mobi|Android/i.test(navigator.userAgent),
+        userAgent: navigator.userAgent,
+      }
+    };
+    console.log("Saving session (simulated):", JSON.stringify(sessionToSave, null, 2));
+    toast({ title: "Session Saved (Simulated)", description: "Session data logged to console. Actual saving logic not yet implemented." });
+  }, [toast, recordedSteps]);
 
   const handleSelectStep = useCallback((id: string, selected: boolean) => {
     setSelectedSteps(prev =>
@@ -507,14 +530,14 @@ export function ReflectFlowOverlay() {
 
   const panelWidthClass = isPanelCollapsed ? `w-[${PANEL_WIDTH_COLLAPSED}px]` : `w-[${PANEL_WIDTH_EXPANDED}px]`;
 
-  if (panelPosition.left === -9999) { // Still calculating initial position
-    return null; // Or a loading spinner
+  if (panelPosition.left === -9999) {
+    return null; 
   }
 
   return (
     <div 
       ref={overlayRef} 
-      className="fixed z-[10000] pointer-events-none" // Increased z-index
+      className="fixed z-[10000] pointer-events-none"
       style={{ 
         top: `${panelPosition.top}px`, 
         left: `${panelPosition.left}px`,
@@ -538,7 +561,7 @@ export function ReflectFlowOverlay() {
                 </div>
               </div>
             )}
-            {isPanelCollapsed && <div className="w-6 h-6"></div>} {/* Placeholder for alignment when collapsed */}
+            {isPanelCollapsed && <div className="w-6 h-6"></div>} 
           </div>
           <div className={`mt-4 ${isPanelCollapsed ? 'flex justify-center' : ''}`}>
             <HeaderControls
