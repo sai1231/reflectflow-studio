@@ -2,21 +2,21 @@
 export type StepType =
   | 'navigate'
   | 'click'
-  | 'doubleClick' // Added to support inspector command
+  | 'doubleClick'
   | 'type'
   | 'keyDown'
   | 'keyUp'
   | 'scroll'
   | 'waitForElement'
-  | 'moveTo'; // Added to support inspector command
+  | 'moveTo';
 
 // Base for all steps
 interface BaseStep {
   id: string;
   type: StepType;
   description: string;
-  selectors?: string[]; // Primary selector list
-  selector?: string; // Typically the first/primary selector, for display or simple cases
+  selectors?: string[]; // Primary selector list - this is the array
+  selector?: string; // Typically the first/primary selector from the array, for display or simple cases
   target?: string; // e.g., 'main' or iframe ID/selector
   timeout?: number; // In milliseconds
 }
@@ -29,17 +29,12 @@ export interface NavigateStep extends BaseStep {
 
 export interface ClickStep extends BaseStep {
   type: 'click';
-  offsetX?: number;
-  offsetY?: number;
-  duration?: number; // For simulating long presses or specific click durations
-  // button?: 'primary' | 'auxiliary' | 'secondary'; // Retained from previous, not in user JSON but common
+  // offsetX, offsetY, duration removed
 }
 
 export interface DoubleClickStep extends BaseStep {
   type: 'doubleClick';
-  offsetX?: number;
-  offsetY?: number;
-  // button?: 'primary' | 'auxiliary' | 'secondary';
+  // offsetX, offsetY removed
 }
 
 export interface TypeStep extends BaseStep {
@@ -74,8 +69,7 @@ export interface WaitForElementStep extends BaseStep {
 
 export interface MoveToStep extends BaseStep {
   type: 'moveTo';
-  offsetX?: number; // Relative to the top-left corner of the element
-  offsetY?: number;
+  // offsetX, offsetY removed
 }
 
 
