@@ -48,9 +48,10 @@ import {
   ALargeSmall, // For selectByVisibleText / selectByAttribute (could be better)
   Replace, // For setValue if different from TypeActionIcon context
   Sparkles, // For execute/executeAsync
-  PanelRightClose, // For collapsing the panel
-  PanelLeftOpen, // For expanding the panel
-  MinusSquare, // Could be an alternative for collapse
+  PanelRightClose,
+  PanelLeftOpen,
+  ChevronUp,
+  ChevronDown,
 } from 'lucide-react';
 
 export const RecordIcon = CircleDot;
@@ -106,6 +107,10 @@ export const ExecuteScriptIcon = Sparkles;
 export const DoubleClickIcon = MousePointer2; // Could use a variant if available or custom SVG
 export const DragAndDropIcon = Move; // Re-using, or custom SVG needed for distinct visual
 
-// Panel collapse/expand icons
-export const CollapsePanelIcon = PanelRightClose;
-export const ExpandPanelIcon = PanelLeftOpen;
+// Panel collapse/expand icons - Old
+export const CollapsePanelIcon = PanelRightClose; // Kept for now if referenced elsewhere, but will be replaced in HeaderControls
+export const ExpandPanelIcon = PanelLeftOpen;   // Kept for now if referenced elsewhere, but will be replaced in HeaderControls
+
+// New Caret/Chevron icons for collapse/expand
+export const ChevronUpIcon = ChevronUp;
+export const ChevronDownIcon = ChevronDown;
