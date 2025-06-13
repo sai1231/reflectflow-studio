@@ -10,16 +10,11 @@ import { StepList } from './StepList';
 import { ElementHoverPopup } from './ElementHoverPopup';
 import { HighlightOverlay } from './HighlightOverlay';
 import { useToast } from '@/hooks/use-toast';
-import { PlayIcon, CheckboxSquareIcon, CheckboxUncheckedIcon, FileIcon } from './icons'; // Corrected imports
+import { PlayIcon, CheckboxSquareIcon, CheckboxUncheckedIcon, FileIcon, TargetIcon } from './icons';
 
 interface ElementDetails {
   element: HTMLElement;
-  info: {
-    id?: string;
-    cssSelector?: string;
-    xpath?: string;
-    tagName?: string;
-  };
+  info: ElementInfoForPopup;
 }
 
 interface ElementInfoForPopup {
@@ -29,14 +24,18 @@ interface ElementInfoForPopup {
   tagName?: string;
 }
 
-
 export function ReflectFlowOverlay() {
   const [isRecording, setIsRecording] = useState(false);
   const [recordedSteps, setRecordedSteps] = useState<Step[]>([]);
   const [selectedSteps, setSelectedSteps] = useState<string[]>([]);
-  const [isInspectorPanelVisible, setIsInspectorPanelVisible] = useState(true); // Default to true to show popup
+  // const [isInspectorPanelVisible, setIsInspectorPanelVisible] = useState(true); // No longer directly controls element popup visibility
   const [isElementSelectorActive, setIsElementSelectorActive] = useState(false);
+  
   const [highlightedElementDetails, setHighlightedElementDetails] = useState<ElementDetails | null>(null);
+  const [inspectIconTarget, setInspectIconTarget] = useState<HTMLElement | null>(null);
+  const [isElementContextPopupOpen, setIsElementContextPopupOpen] = useState(false);
+  const [popupAnchorPosition, setPopupAnchorPosition] = useState<{ top: number; left: number } | null>(null);
+  const [currentPopupElementInfo, setCurrentPopupElementInfo] = useState<ElementInfoForPopup | null>(null);
 
   const overlayRef = useRef<HTMLDivElement>(null);
   const hoverTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -46,7 +45,10 @@ export function ReflectFlowOverlay() {
     const newIsRecording = !isRecording;
     setIsRecording(newIsRecording);
     if (newIsRecording) {
-      setIsElementSelectorActive(false); // Ensure selector is off when recording starts
+      setIsElementSelectorActive(false); 
+      setIsElementContextPopupOpen(false);
+      setInspectIconTarget(null);
+      setHighlightedElementDetails(null);
       toast({
         title: "Recording Started",
         description: "Capturing click interactions. Click on elements on the page.",
@@ -60,7 +62,7 @@ export function ReflectFlowOverlay() {
   }, [isRecording, toast]);
 
   const handleClick = useCallback((event: MouseEvent) => {
-    if (isElementSelectorActive || !isRecording) return; 
+    if (isElementSelectorActive || !isRecording || isElementContextPopupOpen) return; 
 
     if (overlayRef.current && overlayRef.current.contains(event.target as Node)) {
       return;
@@ -75,7 +77,7 @@ export function ReflectFlowOverlay() {
     let descriptionDetailText = target.tagName.toLowerCase();
 
     if (target.id) {
-      selector = `#${target.id}`;
+      selector = `#${CSS.escape(target.id)}`;
       descriptionDetailText = selector;
     } else {
       const significantClass = Array.from(target.classList).find(
@@ -104,10 +106,10 @@ export function ReflectFlowOverlay() {
 
     setRecordedSteps(prevSteps => [...prevSteps, newStep]);
     toast({ title: "Action Recorded", description: `Recorded: ${newStep.description}` });
-  }, [toast, isElementSelectorActive, isRecording]); 
+  }, [toast, isElementSelectorActive, isRecording, isElementContextPopupOpen]); 
 
   useEffect(() => {
-    if (isRecording && !isElementSelectorActive) {
+    if (isRecording && !isElementSelectorActive && !isElementContextPopupOpen) {
       document.addEventListener('click', handleClick, true);
     } else {
       document.removeEventListener('click', handleClick, true);
@@ -115,11 +117,11 @@ export function ReflectFlowOverlay() {
     return () => {
       document.removeEventListener('click', handleClick, true);
     };
-  }, [isRecording, handleClick, isElementSelectorActive]);
+  }, [isRecording, handleClick, isElementSelectorActive, isElementContextPopupOpen]);
 
 
   const generateElementInfo = (element: HTMLElement): ElementInfoForPopup => {
-    let id = element.id ? `#${element.id}` : undefined;
+    let id = element.id ? `#${CSS.escape(element.id)}` : undefined;
     let cssSelector = `${element.tagName.toLowerCase()}`;
     if (element.classList.length > 0) {
       const classes = Array.from(element.classList).filter(c => c.trim() !== '').map(c => CSS.escape(c)).join('.');
@@ -135,22 +137,23 @@ export function ReflectFlowOverlay() {
             xpath += `[contains(@class, '${CSS.escape(significantClass)}')]`;
         }
     }
-    // Add text content to XPath if element is simple (e.g. button, a)
     if (['button', 'a', 'span', 'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'].includes(element.tagName.toLowerCase()) && element.textContent && element.textContent.trim().length < 50 && !element.children.length) {
         xpath += `[normalize-space()="${element.textContent.trim().replace(/"/g, "'")}"]`;
     }
 
-
     return {
       id: element.id || undefined,
-      cssSelector: id || cssSelector, // Prefer ID if it exists for the cssSelector field in popup
+      cssSelector: id || cssSelector,
       xpath: xpath,
       tagName: element.tagName.toLowerCase(),
     };
   };
 
   const handleMouseOver = useCallback((event: MouseEvent) => {
-    if (!isElementSelectorActive) return;
+    // This function should only set up the timer for showing the icon.
+    // It should not run if a popup is already open.
+    if (!isElementSelectorActive || isElementContextPopupOpen) return;
+    
     const target = event.target as HTMLElement;
 
     if (hoverTimerRef.current) {
@@ -159,51 +162,112 @@ export function ReflectFlowOverlay() {
     }
 
     if (overlayRef.current && overlayRef.current.contains(target)) {
-      return;
+        setInspectIconTarget(null); // Clear icon if hovering over overlay
+        setHighlightedElementDetails(null);
+        return;
     }
     if (!target || !target.tagName || target === document.body || target === document.documentElement) {
-      return;
+        setInspectIconTarget(null); // Clear icon if on body/html
+        setHighlightedElementDetails(null);
+        return;
     }
+    
+    // Clear previous icon target immediately to avoid flickering if mouse moves fast
+    setInspectIconTarget(null);
+    setHighlightedElementDetails({ element: target, info: generateElementInfo(target) }); // Set highlight immediately
 
     hoverTimerRef.current = setTimeout(() => {
-      const info = generateElementInfo(target);
-      setHighlightedElementDetails({ element: target, info });
+      // After delay, confirm the target for the icon
+      setInspectIconTarget(target);
     }, 500);
-  }, [isElementSelectorActive]);
+  }, [isElementSelectorActive, isElementContextPopupOpen]);
 
   const handleMouseOut = useCallback((event: MouseEvent) => {
-    if (!isElementSelectorActive) return;
+    if (!isElementSelectorActive || isElementContextPopupOpen) return;
+    
     if (hoverTimerRef.current) {
       clearTimeout(hoverTimerRef.current);
       hoverTimerRef.current = null;
     }
-  }, [isElementSelectorActive]);
+    // Don't clear inspectIconTarget or highlightedElementDetails here immediately
+    // to allow user to move mouse to the icon.
+    // Icon will be cleared if another element is hovered or selector mode changes.
+  }, [isElementSelectorActive, isElementContextPopupOpen]);
+
+
+  const handleInspectIconClick = useCallback((event: React.MouseEvent, element: HTMLElement) => {
+    event.stopPropagation();
+    if (!highlightedElementDetails || highlightedElementDetails.element !== element) {
+      // This case should ideally not happen if icon is tied to highlightedElementDetails
+      const info = generateElementInfo(element);
+      setHighlightedElementDetails({element, info});
+      setCurrentPopupElementInfo(info);
+    } else {
+      setCurrentPopupElementInfo(highlightedElementDetails.info);
+    }
+
+    const iconRect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+    const popupWidth = 384; // approx width of ElementHoverPopup (w-96)
+    let left = iconRect.left + iconRect.width / 2 - popupWidth / 2;
+    let top = iconRect.bottom + 10;
+
+    // Adjust if popup goes off-screen
+    if (left < 10) left = 10;
+    if (left + popupWidth > window.innerWidth - 10) {
+        left = window.innerWidth - popupWidth - 10;
+    }
+    if (top + 300 > window.innerHeight - 10) { // Assuming popup height ~300px
+        top = iconRect.top - 300 - 10; // Position above icon
+        if (top < 10) top = 10;
+    }
+
+    setPopupAnchorPosition({ top, left });
+    setIsElementContextPopupOpen(true);
+    setInspectIconTarget(null); // Hide the icon itself once popup is open
+  }, [highlightedElementDetails]);
 
   useEffect(() => {
-    if (isElementSelectorActive) {
-      document.addEventListener('mouseover', handleMouseOver);
-      document.addEventListener('mouseout', handleMouseOut);
-      const handleKeyDown = (event: KeyboardEvent) => {
-        if (event.key === 'Escape') {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        if (isElementContextPopupOpen) {
+          setIsElementContextPopupOpen(false);
+          setCurrentPopupElementInfo(null);
+          // Keep highlightedElementDetails so border remains until mouse moves or selector off
+        } else if (isElementSelectorActive) {
           setIsElementSelectorActive(false);
           toast({ title: "Element Selector Deactivated", description: "Pressed ESC key."});
         }
-      };
-      document.addEventListener('keydown', handleKeyDown);
+      }
+    };
 
-      return () => {
+    if (isElementSelectorActive) {
+      document.addEventListener('keydown', handleKeyDown);
+      if (!isElementContextPopupOpen) { // Only add mouse listeners if popup is NOT open
+        document.addEventListener('mouseover', handleMouseOver);
+        document.addEventListener('mouseout', handleMouseOut);
+      } else { // Popup IS open, remove mouse listeners
         document.removeEventListener('mouseover', handleMouseOver);
         document.removeEventListener('mouseout', handleMouseOut);
-        document.removeEventListener('keydown', handleKeyDown);
-        if (hoverTimerRef.current) {
-          clearTimeout(hoverTimerRef.current);
-        }
-        setHighlightedElementDetails(null); 
-      };
-    } else {
-       setHighlightedElementDetails(null);
+        if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
+      }
+    } else { // Selector not active
+      document.removeEventListener('mouseover', handleMouseOver);
+      document.removeEventListener('mouseout', handleMouseOut);
+      document.removeEventListener('keydown', handleKeyDown);
+      if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
+      setHighlightedElementDetails(null);
+      setInspectIconTarget(null);
+      setIsElementContextPopupOpen(false);
+      setCurrentPopupElementInfo(null);
     }
-  }, [isElementSelectorActive, handleMouseOver, handleMouseOut, toast]);
+
+    return () => {
+      document.removeEventListener('mouseover', handleMouseOver);
+      document.removeEventListener('mouseout', handleMouseOut);
+      document.removeEventListener('keydown', handleKeyDown);
+      if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
+    };
+  }, [isElementSelectorActive, isElementContextPopupOpen, handleMouseOver, handleMouseOut, toast]);
 
 
   const handlePlayAll = useCallback(() => {
@@ -226,22 +290,27 @@ export function ReflectFlowOverlay() {
     const newIsActive = !isElementSelectorActive;
     setIsElementSelectorActive(newIsActive);
     if (newIsActive) {
-      setIsRecording(false); // Pause recording if selector is activated
+      setIsRecording(false); 
       setHighlightedElementDetails(null); 
+      setInspectIconTarget(null);
+      setIsElementContextPopupOpen(false);
       toast({
         title: "Element Selector Activated",
-        description: "Hover over elements to inspect. Press ESC to deactivate.",
+        description: "Hover over elements. Click target icon to inspect. Press ESC to deactivate.",
       });
     } else {
       toast({
         title: "Element Selector Deactivated",
         description: "Element inspection is off.",
       });
+      setHighlightedElementDetails(null);
+      setInspectIconTarget(null);
+      setIsElementContextPopupOpen(false);
     }
   }, [isElementSelectorActive, toast]);
 
   const handleCommandSelected = useCallback((command: string, targetElementInfo: ElementInfoForPopup) => {
-    const selector = targetElementInfo.id ? `#${targetElementInfo.id}` : targetElementInfo.cssSelector || 'N/A';
+    const selector = targetElementInfo.id ? `#${CSS.escape(targetElementInfo.id)}` : targetElementInfo.cssSelector || 'N/A';
     const tagName = targetElementInfo.tagName || 'element';
     let newStep: Step | null = null;
     let toastMessage = "";
@@ -250,9 +319,7 @@ export function ReflectFlowOverlay() {
       case 'assertIsVisible':
         newStep = {
           id: String(Date.now()) + Math.random().toString(36).substring(2,7),
-          type: 'assert',
-          selector,
-          description: `Assert ${tagName} (${selector}) is visible`,
+          type: 'assert', selector, description: `Assert ${tagName} (${selector}) is visible`,
           params: { assertionType: 'isVisible' },
         };
         toastMessage = `Assertion (Is Visible) for ${selector} added.`;
@@ -260,38 +327,29 @@ export function ReflectFlowOverlay() {
       case 'assertTextContentEquals':
         newStep = {
           id: String(Date.now()) + Math.random().toString(36).substring(2,7),
-          type: 'assert',
-          selector,
-          description: `Assert text of ${tagName} (${selector}) equals...`,
-          params: { assertionType: 'textContentEquals', expectedValue: '' }, // User to fill expectedValue
+          type: 'assert', selector, description: `Assert text of ${tagName} (${selector}) equals...`,
+          params: { assertionType: 'textContentEquals', expectedValue: '' }, 
         };
         toastMessage = `Assertion (Text Content) for ${selector} added. Edit to set expected value.`;
         break;
       case 'actionClick':
         newStep = {
           id: String(Date.now()) + Math.random().toString(36).substring(2,7),
-          type: 'click',
-          selector,
-          description: `Click on ${tagName} (${selector})`,
+          type: 'click', selector, description: `Click on ${tagName} (${selector})`,
         };
         toastMessage = `Click action for ${selector} added.`;
         break;
       case 'actionTypeText':
         newStep = {
           id: String(Date.now()) + Math.random().toString(36).substring(2,7),
-          type: 'type',
-          selector,
-          value: '', // User to fill value
-          description: `Type text in ${tagName} (${selector})`,
+          type: 'type', selector, value: '', description: `Type text in ${tagName} (${selector})`,
         };
         toastMessage = `Type action for ${selector} added. Edit to set text.`;
         break;
       case 'actionScrollIntoView':
         newStep = {
           id: String(Date.now()) + Math.random().toString(36).substring(2,7),
-          type: 'scroll', // Or a more specific 'scrollIntoView' type if Step types are expanded
-          selector,
-          description: `Scroll ${tagName} (${selector}) into view`,
+          type: 'scroll', selector, description: `Scroll ${tagName} (${selector}) into view`,
           params: { scrollType: 'intoView' }
         };
         toastMessage = `Scroll Into View action for ${selector} added.`;
@@ -299,19 +357,15 @@ export function ReflectFlowOverlay() {
       case 'waitForVisible':
         newStep = {
           id: String(Date.now()) + Math.random().toString(36).substring(2,7),
-          type: 'assert', // Using 'assert' type with specific params, or could be new 'wait' type
-          selector,
-          description: `Wait for ${tagName} (${selector}) to be visible`,
-          params: { waitType: 'isVisible', timeout: 5000 }, // Default timeout, could be editable
+          type: 'assert', selector, description: `Wait for ${tagName} (${selector}) to be visible`,
+          params: { waitType: 'isVisible', timeout: 5000 }, 
         };
         toastMessage = `Wait (For Visible) for ${selector} added.`;
         break;
       case 'waitForClickable':
         newStep = {
           id: String(Date.now()) + Math.random().toString(36).substring(2,7),
-          type: 'assert',
-          selector,
-          description: `Wait for ${tagName} (${selector}) to be clickable`,
+          type: 'assert', selector, description: `Wait for ${tagName} (${selector}) to be clickable`,
           params: { waitType: 'isClickable', timeout: 5000 },
         };
         toastMessage = `Wait (For Clickable) for ${selector} added.`;
@@ -322,7 +376,12 @@ export function ReflectFlowOverlay() {
       setRecordedSteps(prev => [...prev, newStep]);
       toast({ title: "Step Added", description: toastMessage });
     }
-    setIsElementSelectorActive(false); // Deactivate selector mode
+    setIsElementContextPopupOpen(false); // Close popup
+    setCurrentPopupElementInfo(null);
+    // Keep element selector active, but clear current highlight for next interaction.
+    // User might want to inspect another element immediately.
+    setHighlightedElementDetails(null); 
+    setInspectIconTarget(null);
   }, [toast]);
 
 
@@ -355,12 +414,13 @@ export function ReflectFlowOverlay() {
     toast({ title: "Step Deleted", description: "The step has been removed." });
   }, [toast]);
   
-  const popupElementInfo = useMemo((): ElementInfoForPopup => {
-    if (highlightedElementDetails?.info) {
-      return highlightedElementDetails.info;
-    }
-    return { id: undefined, cssSelector: 'N/A', xpath: 'N/A', tagName: 'N/A' };
-  }, [highlightedElementDetails]);
+  const closeElementContextPopup = useCallback(() => {
+    setIsElementContextPopupOpen(false);
+    setCurrentPopupElementInfo(null);
+    // Optionally, clear highlight or keep it until next hover
+    // setHighlightedElementDetails(null); 
+    // setInspectIconTarget(null);
+  }, []);
 
   return (
     <div ref={overlayRef} className="fixed top-0 right-0 h-full p-4 flex flex-col items-end z-[1000] pointer-events-none">
@@ -374,9 +434,11 @@ export function ReflectFlowOverlay() {
                 <CardDescription className="text-xs">Record & Playback UI Interactions</CardDescription>
               </div>
             </div>
+            {/* This button is now less relevant for element popup, can be removed or repurposed
             <Button variant="ghost" size="sm" onClick={() => setIsInspectorPanelVisible(prev => !prev)} className="text-xs">
               {isInspectorPanelVisible ? "Hide" : "Show"} Inspector
             </Button>
+            */}
           </div>
           <div className="mt-4">
             <HeaderControls
@@ -416,13 +478,44 @@ export function ReflectFlowOverlay() {
           </CardFooter>
         )}
       </Card>
+
+      {/* Clickable Icon that appears on hover */}
+      {isElementSelectorActive && inspectIconTarget && !isElementContextPopupOpen && (() => {
+          const rect = inspectIconTarget.getBoundingClientRect();
+          // Attempt to center the icon on the element, adjust as needed
+          const iconSize = 32; // Assuming h-8 w-8 for the button
+          let iconTop = rect.top + rect.height / 2 - iconSize / 2;
+          let iconLeft = rect.left + rect.width / 2 - iconSize / 2;
+
+          // Ensure icon stays within viewport bounds slightly
+          iconTop = Math.max(8, Math.min(iconTop, window.innerHeight - iconSize - 8));
+          iconLeft = Math.max(8, Math.min(iconLeft, window.innerWidth - iconSize - 8));
+          
+          return (
+              <Button
+                  variant="outline"
+                  size="icon"
+                  className="fixed h-8 w-8 bg-background shadow-lg rounded-full p-0 z-[10001] pointer-events-auto"
+                  style={{
+                      top: `${iconTop}px`,
+                      left: `${iconLeft}px`,
+                  }}
+                  onClick={(e) => handleInspectIconClick(e, inspectIconTarget)}
+                  title="Inspect Element"
+              >
+                  <TargetIcon className="h-4 w-4 text-primary" />
+              </Button>
+          );
+      })()}
+      
       <ElementHoverPopup 
-        elementInfo={popupElementInfo} 
-        isVisible={isElementSelectorActive && !!highlightedElementDetails && isInspectorPanelVisible} 
+        elementInfo={currentPopupElementInfo} 
+        isOpen={isElementContextPopupOpen && !!currentPopupElementInfo} 
         onCommandSelected={handleCommandSelected}
+        position={popupAnchorPosition}
+        onClose={closeElementContextPopup}
       />
-      <HighlightOverlay targetElement={isElementSelectorActive ? highlightedElementDetails?.element ?? null : null} />
+      <HighlightOverlay targetElement={isElementSelectorActive ? (highlightedElementDetails?.element ?? null) : null} />
     </div>
   );
 }
-

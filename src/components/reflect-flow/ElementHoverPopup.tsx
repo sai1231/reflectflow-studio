@@ -1,7 +1,7 @@
 
 "use client";
 
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
@@ -14,8 +14,8 @@ import {
   WaitIcon,
   AssertionIcon,
   ActionIcon,
-  SubMenuArrowIcon 
-} from './icons';
+  XIcon // For close button
+} from './icons'; 
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -36,15 +36,17 @@ interface ElementInfo {
 }
 
 interface ElementHoverPopupProps {
-  elementInfo: ElementInfo;
-  isVisible: boolean;
+  elementInfo: ElementInfo | null; // Can be null if not inspecting
+  isOpen: boolean;
   onCommandSelected: (command: string, targetElementInfo: ElementInfo) => void;
+  position: { top: number; left: number } | null;
+  onClose: () => void;
 }
 
-export function ElementHoverPopup({ elementInfo, isVisible, onCommandSelected }: ElementHoverPopupProps) {
+export function ElementHoverPopup({ elementInfo, isOpen, onCommandSelected, position, onClose }: ElementHoverPopupProps) {
   const { toast } = useToast();
 
-  if (!isVisible) {
+  if (!isOpen || !position || !elementInfo) {
     return null;
   }
 
@@ -56,31 +58,41 @@ export function ElementHoverPopup({ elementInfo, isVisible, onCommandSelected }:
     });
   };
 
-  const preferredSelector = elementInfo.id ? `#${elementInfo.id}` : elementInfo.cssSelector || elementInfo.xpath || 'N/A';
+  const preferredSelector = elementInfo.id ? `#${CSS.escape(elementInfo.id)}` : elementInfo.cssSelector || elementInfo.xpath || 'N/A';
   const targetTag = elementInfo.tagName || 'element';
 
   const handleSelect = (command: string) => {
     onCommandSelected(command, elementInfo);
+    // onClose(); // Command selection now closes popup from ReflectFlowOverlay
   };
 
   return (
-    <Card className="fixed bottom-4 left-4 w-96 shadow-2xl z-50 bg-card/95 backdrop-blur-sm">
-      <CardHeader className="p-3">
+    <Card 
+      className="fixed w-96 shadow-2xl z-[10002] bg-card/95 backdrop-blur-sm pointer-events-auto"
+      style={{
+        top: `${position.top}px`,
+        left: `${position.left}px`,
+      }}
+    >
+      <CardHeader className="p-3 relative">
         <CardTitle className="text-base flex justify-between items-center">
           Element Inspector
-          <Badge variant="secondary" className="font-normal">Mock</Badge>
+          <Badge variant="secondary" className="font-normal">Targeted</Badge>
         </CardTitle>
+        <Button variant="ghost" size="icon" className="absolute top-1 right-1 h-6 w-6" onClick={onClose}>
+          <XIcon className="h-4 w-4" />
+          <span className="sr-only">Close</span>
+        </Button>
       </CardHeader>
       <CardContent className="p-3 text-sm space-y-2">
         <div>
           <strong className="text-xs text-muted-foreground block">Target:</strong>
-          <span className="truncate font-mono bg-muted px-1 py-0.5 rounded text-xs" title={preferredSelector}>
-            {targetTag}{preferredSelector !== targetTag ? ` (${preferredSelector})` : ''}
+          <span className="truncate font-mono bg-muted px-1 py-0.5 rounded text-xs block max-w-full" title={preferredSelector}>
+            {targetTag}{preferredSelector !== targetTag && preferredSelector !== 'N/A' ? ` (${preferredSelector})` : ''}
           </span>
         </div>
         
         <div className="flex space-x-2 pt-2">
-          {/* Assertions Dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="sm" className="flex-1">
@@ -96,11 +108,9 @@ export function ElementHoverPopup({ elementInfo, isVisible, onCommandSelected }:
               <DropdownMenuItem onSelect={() => handleSelect('assertTextContentEquals')}>
                 <TypeActionIcon className="mr-2 h-4 w-4" /> Text Content Equals...
               </DropdownMenuItem>
-              {/* Add more assertion types here */}
             </DropdownMenuContent>
           </DropdownMenu>
 
-          {/* Actions Dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="sm" className="flex-1">
@@ -119,13 +129,11 @@ export function ElementHoverPopup({ elementInfo, isVisible, onCommandSelected }:
                <DropdownMenuItem onSelect={() => handleSelect('actionScrollIntoView')}>
                 <ScrollIcon className="mr-2 h-4 w-4" /> Scroll into View
               </DropdownMenuItem>
-              {/* Add more action types here */}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
         
         <div className="pt-2">
-           {/* Wait For Dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="sm" className="w-full">
@@ -141,11 +149,9 @@ export function ElementHoverPopup({ elementInfo, isVisible, onCommandSelected }:
               <DropdownMenuItem onSelect={() => handleSelect('waitForClickable')}>
                 <ClickIcon className="mr-2 h-4 w-4" /> Wait For Clickable
               </DropdownMenuItem>
-              {/* Add more wait types here */}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
-
 
         <div className="pt-3 space-y-1">
           <strong className="text-xs text-muted-foreground block">Selectors:</strong>
@@ -153,8 +159,8 @@ export function ElementHoverPopup({ elementInfo, isVisible, onCommandSelected }:
             <div className="flex items-center justify-between">
               <span className="text-xs text-muted-foreground">ID:</span>
               <div className="flex items-center">
-                <span className="truncate font-mono bg-muted px-1 py-0.5 rounded text-xs max-w-[180px]" title={`#${elementInfo.id}`}>{`#${elementInfo.id}`}</span>
-                <Button variant="ghost" size="icon" className="h-6 w-6 ml-1" onClick={() => copyToClipboard(`#${elementInfo.id!}`, "ID")}>
+                <span className="truncate font-mono bg-muted px-1 py-0.5 rounded text-xs max-w-[180px]" title={`#${CSS.escape(elementInfo.id)}`}>{`#${CSS.escape(elementInfo.id)}`}</span>
+                <Button variant="ghost" size="icon" className="h-6 w-6 ml-1" onClick={() => copyToClipboard(`#${CSS.escape(elementInfo.id!)}`, "ID")}>
                   <CopyIcon className="h-3 w-3" />
                 </Button>
               </div>
@@ -183,9 +189,8 @@ export function ElementHoverPopup({ elementInfo, isVisible, onCommandSelected }:
             </div>
           )}
         </div>
-         <p className="text-xs text-muted-foreground pt-1">Select a command to add a step for the highlighted element.</p>
+         <p className="text-xs text-muted-foreground pt-1">Select a command to add a step for the targeted element.</p>
       </CardContent>
     </Card>
   );
 }
-

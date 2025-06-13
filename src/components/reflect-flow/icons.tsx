@@ -29,6 +29,7 @@ import {
   Watch, // For Wait actions
   CheckCircle2, // For Assertions
   PlayCircle, // For Actions
+  X // For close buttons
 } from 'lucide-react';
 
 export const RecordIcon = CircleDot;
@@ -59,4 +60,5 @@ export const SubMenuArrowIcon = ChevronRight;
 export const WaitIcon = Watch;
 export const AssertionIcon = CheckCircle2; // General for assertion menu
 export const ActionIcon = PlayCircle; // General for action menu
+export const XIcon = X; // For close buttons
 
