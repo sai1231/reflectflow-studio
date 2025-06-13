@@ -39,49 +39,53 @@ export function ReflectFlowOverlay() {
   // Effect for handling global click listener
   useEffect(() => {
     const handleClick = (event: MouseEvent) => {
-      // Intentionally not checking isRecording here, as the listener is only added when isRecording is true
-      
+      // If the click originated from within the ReflectFlow overlay, ignore it.
       if (overlayRef.current && overlayRef.current.contains(event.target as Node)) {
-        // Click was inside the ReflectFlow overlay, ignore
         return;
       }
 
       const target = event.target as HTMLElement;
       
-      // Prevent clicks on scrollbars or non-element targets
-      if (!target || !target.tagName) return;
-
+      // Ignore clicks on non-element targets (e.g., scrollbars, document itself if no specific element is hit)
+      if (!target || !target.tagName) {
+        return;
+      }
+      
       let simpleSelector = target.tagName.toLowerCase();
       if (target.id) {
         simpleSelector = `#${target.id}`;
-      } else if (target.classList && target.classList.length > 0 && typeof target.classList.item(0) === 'string') {
-         // Fallback to tagName.className if no ID (using first class)
-        simpleSelector = `${target.tagName.toLowerCase()}.${target.classList.item(0)}`;
+      } else if (target.classList && target.classList.length > 0) {
+        // Use the first class name if available and not empty
+        const firstClass = target.classList.item(0);
+        if (firstClass) {
+          simpleSelector = `${target.tagName.toLowerCase()}.${CSS.escape(firstClass)}`;
+        }
       }
       
-      const description = `Click on ${target.tagName.toLowerCase()}${target.id ? ` (#${target.id})` : ''}${target.classList && target.classList.length > 0 && typeof target.classList.item(0) === 'string' ? ` (.${target.classList.item(0)})` : ''}`;
+      const description = `Click on ${target.tagName.toLowerCase()}${target.id ? ` (#${target.id})` : ''}${target.classList && target.classList.length > 0 && target.classList.item(0) ? ` (.${target.classList.item(0)})` : ''}`;
 
       const newStep: Step = {
-        id: String(Date.now()),
+        id: String(Date.now()) + Math.random().toString(36).substring(2,7), // Add random part for better uniqueness
         type: 'click',
         selector: simpleSelector,
         description: description,
       };
 
       setRecordedSteps(prevSteps => [...prevSteps, newStep]);
-      toast({ title: "Action Recorded", description: newStep.description });
+      toast({ title: "Action Recorded", description: `Recorded: ${newStep.description}` });
     };
 
     if (isRecording) {
-      document.addEventListener('click', handleClick, true); // Use capture phase to get clicks first
+      document.addEventListener('click', handleClick, true); // Use capture phase
     } else {
       document.removeEventListener('click', handleClick, true);
     }
 
+    // Cleanup function to remove the event listener
     return () => {
       document.removeEventListener('click', handleClick, true);
     };
-  }, [isRecording, toast, setRecordedSteps]); // setRecordedSteps is stable, but good to include
+  }, [isRecording, toast]); // Dependencies: re-run if isRecording or toast changes
 
   const handlePlayAll = useCallback(() => {
     if (recordedSteps.length === 0) {
@@ -101,7 +105,7 @@ export function ReflectFlowOverlay() {
 
   const handleAddAssertion = useCallback(() => {
     const newAssertion: Step = {
-      id: String(Date.now()),
+      id: String(Date.now()) + Math.random().toString(36).substring(2,7),
       type: 'assert',
       description: 'New Assertion (Edit details below)',
       selector: 'body', 
@@ -203,3 +207,4 @@ export function ReflectFlowOverlay() {
     </div>
   );
 }
+
