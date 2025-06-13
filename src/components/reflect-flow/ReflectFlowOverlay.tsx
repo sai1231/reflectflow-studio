@@ -8,9 +8,9 @@ import { Button } from '@/components/ui/button';
 import { HeaderControls } from './HeaderControls';
 import { StepList } from './StepList';
 import { ElementHoverPopup } from './ElementHoverPopup';
-import { HighlightOverlay } from './HighlightOverlay'; // Added
+import { HighlightOverlay } from './HighlightOverlay';
 import { useToast } from '@/hooks/use-toast';
-import { PlayIcon, CheckboxSquareIcon, CheckboxUncheckedIcon, FileIcon } from './icons';
+import { PlayIcon, CheckboxSquareIcon, CheckboxUncheckedIcon, FileIcon } from './icons'; // Corrected imports
 
 interface ElementDetails {
   element: HTMLElement;
@@ -22,13 +22,21 @@ interface ElementDetails {
   };
 }
 
+interface ElementInfoForPopup {
+  id?: string;
+  cssSelector?: string;
+  xpath?: string;
+  tagName?: string;
+}
+
+
 export function ReflectFlowOverlay() {
   const [isRecording, setIsRecording] = useState(false);
   const [recordedSteps, setRecordedSteps] = useState<Step[]>([]);
   const [selectedSteps, setSelectedSteps] = useState<string[]>([]);
-  const [isInspectorPanelVisible, setIsInspectorPanelVisible] = useState(false); // Renamed for clarity
+  const [isInspectorPanelVisible, setIsInspectorPanelVisible] = useState(true); // Default to true to show popup
   const [isElementSelectorActive, setIsElementSelectorActive] = useState(false);
-  const [highlightedElementDetails, setHighlightedElementDetails] = useState<ElementDetails | null>(null); // For hover inspect
+  const [highlightedElementDetails, setHighlightedElementDetails] = useState<ElementDetails | null>(null);
 
   const overlayRef = useRef<HTMLDivElement>(null);
   const hoverTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -38,6 +46,7 @@ export function ReflectFlowOverlay() {
     const newIsRecording = !isRecording;
     setIsRecording(newIsRecording);
     if (newIsRecording) {
+      setIsElementSelectorActive(false); // Ensure selector is off when recording starts
       toast({
         title: "Recording Started",
         description: "Capturing click interactions. Click on elements on the page.",
@@ -51,7 +60,7 @@ export function ReflectFlowOverlay() {
   }, [isRecording, toast]);
 
   const handleClick = useCallback((event: MouseEvent) => {
-    if (isElementSelectorActive) return; // Don't record clicks if selector is active
+    if (isElementSelectorActive || !isRecording) return; 
 
     if (overlayRef.current && overlayRef.current.contains(event.target as Node)) {
       return;
@@ -95,10 +104,10 @@ export function ReflectFlowOverlay() {
 
     setRecordedSteps(prevSteps => [...prevSteps, newStep]);
     toast({ title: "Action Recorded", description: `Recorded: ${newStep.description}` });
-  }, [toast, isElementSelectorActive]); 
+  }, [toast, isElementSelectorActive, isRecording]); 
 
   useEffect(() => {
-    if (isRecording) {
+    if (isRecording && !isElementSelectorActive) {
       document.addEventListener('click', handleClick, true);
     } else {
       document.removeEventListener('click', handleClick, true);
@@ -106,24 +115,35 @@ export function ReflectFlowOverlay() {
     return () => {
       document.removeEventListener('click', handleClick, true);
     };
-  }, [isRecording, handleClick]);
+  }, [isRecording, handleClick, isElementSelectorActive]);
 
 
-  // Element Selector Logic
-  const generateElementInfo = (element: HTMLElement) => {
+  const generateElementInfo = (element: HTMLElement): ElementInfoForPopup => {
     let id = element.id ? `#${element.id}` : undefined;
     let cssSelector = `${element.tagName.toLowerCase()}`;
     if (element.classList.length > 0) {
-      cssSelector += `.${Array.from(element.classList).filter(c => c.trim() !== '').map(c => CSS.escape(c)).join('.')}`;
+      const classes = Array.from(element.classList).filter(c => c.trim() !== '').map(c => CSS.escape(c)).join('.');
+      if (classes) cssSelector += `.${classes}`;
     }
-    // Simplified XPath
+    
     let xpath = `//${element.tagName.toLowerCase()}`;
     if (element.id) {
       xpath += `[@id='${CSS.escape(element.id)}']`;
+    } else if (element.classList.length > 0) {
+        const significantClass = Array.from(element.classList).find(c => !c.startsWith('bg-') && !c.startsWith('text-') && !c.startsWith('p-') && !c.startsWith('m-') && c.trim() !== '');
+        if (significantClass) {
+            xpath += `[contains(@class, '${CSS.escape(significantClass)}')]`;
+        }
     }
+    // Add text content to XPath if element is simple (e.g. button, a)
+    if (['button', 'a', 'span', 'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'].includes(element.tagName.toLowerCase()) && element.textContent && element.textContent.trim().length < 50 && !element.children.length) {
+        xpath += `[normalize-space()="${element.textContent.trim().replace(/"/g, "'")}"]`;
+    }
+
+
     return {
       id: element.id || undefined,
-      cssSelector: id || cssSelector,
+      cssSelector: id || cssSelector, // Prefer ID if it exists for the cssSelector field in popup
       xpath: xpath,
       tagName: element.tagName.toLowerCase(),
     };
@@ -139,8 +159,6 @@ export function ReflectFlowOverlay() {
     }
 
     if (overlayRef.current && overlayRef.current.contains(target)) {
-      // If mousing over the overlay itself, clear any existing highlight
-      // setHighlightedElementDetails(null); // Optional: clear if moving into overlay
       return;
     }
     if (!target || !target.tagName || target === document.body || target === document.documentElement) {
@@ -159,14 +177,12 @@ export function ReflectFlowOverlay() {
       clearTimeout(hoverTimerRef.current);
       hoverTimerRef.current = null;
     }
-    // Note: Highlight persists until a new element is highlighted or mode is deactivated
   }, [isElementSelectorActive]);
 
   useEffect(() => {
     if (isElementSelectorActive) {
       document.addEventListener('mouseover', handleMouseOver);
       document.addEventListener('mouseout', handleMouseOut);
-      // Add key listener for ESC to deactivate selector mode
       const handleKeyDown = (event: KeyboardEvent) => {
         if (event.key === 'Escape') {
           setIsElementSelectorActive(false);
@@ -182,10 +198,9 @@ export function ReflectFlowOverlay() {
         if (hoverTimerRef.current) {
           clearTimeout(hoverTimerRef.current);
         }
-        setHighlightedElementDetails(null); // Clear highlight when selector is deactivated
+        setHighlightedElementDetails(null); 
       };
     } else {
-      // Ensure highlight is cleared if mode is turned off externally
        setHighlightedElementDetails(null);
     }
   }, [isElementSelectorActive, handleMouseOver, handleMouseOut, toast]);
@@ -211,7 +226,8 @@ export function ReflectFlowOverlay() {
     const newIsActive = !isElementSelectorActive;
     setIsElementSelectorActive(newIsActive);
     if (newIsActive) {
-      setHighlightedElementDetails(null); // Clear previous selection
+      setIsRecording(false); // Pause recording if selector is activated
+      setHighlightedElementDetails(null); 
       toast({
         title: "Element Selector Activated",
         description: "Hover over elements to inspect. Press ESC to deactivate.",
@@ -223,6 +239,91 @@ export function ReflectFlowOverlay() {
       });
     }
   }, [isElementSelectorActive, toast]);
+
+  const handleCommandSelected = useCallback((command: string, targetElementInfo: ElementInfoForPopup) => {
+    const selector = targetElementInfo.id ? `#${targetElementInfo.id}` : targetElementInfo.cssSelector || 'N/A';
+    const tagName = targetElementInfo.tagName || 'element';
+    let newStep: Step | null = null;
+    let toastMessage = "";
+
+    switch (command) {
+      case 'assertIsVisible':
+        newStep = {
+          id: String(Date.now()) + Math.random().toString(36).substring(2,7),
+          type: 'assert',
+          selector,
+          description: `Assert ${tagName} (${selector}) is visible`,
+          params: { assertionType: 'isVisible' },
+        };
+        toastMessage = `Assertion (Is Visible) for ${selector} added.`;
+        break;
+      case 'assertTextContentEquals':
+        newStep = {
+          id: String(Date.now()) + Math.random().toString(36).substring(2,7),
+          type: 'assert',
+          selector,
+          description: `Assert text of ${tagName} (${selector}) equals...`,
+          params: { assertionType: 'textContentEquals', expectedValue: '' }, // User to fill expectedValue
+        };
+        toastMessage = `Assertion (Text Content) for ${selector} added. Edit to set expected value.`;
+        break;
+      case 'actionClick':
+        newStep = {
+          id: String(Date.now()) + Math.random().toString(36).substring(2,7),
+          type: 'click',
+          selector,
+          description: `Click on ${tagName} (${selector})`,
+        };
+        toastMessage = `Click action for ${selector} added.`;
+        break;
+      case 'actionTypeText':
+        newStep = {
+          id: String(Date.now()) + Math.random().toString(36).substring(2,7),
+          type: 'type',
+          selector,
+          value: '', // User to fill value
+          description: `Type text in ${tagName} (${selector})`,
+        };
+        toastMessage = `Type action for ${selector} added. Edit to set text.`;
+        break;
+      case 'actionScrollIntoView':
+        newStep = {
+          id: String(Date.now()) + Math.random().toString(36).substring(2,7),
+          type: 'scroll', // Or a more specific 'scrollIntoView' type if Step types are expanded
+          selector,
+          description: `Scroll ${tagName} (${selector}) into view`,
+          params: { scrollType: 'intoView' }
+        };
+        toastMessage = `Scroll Into View action for ${selector} added.`;
+        break;
+      case 'waitForVisible':
+        newStep = {
+          id: String(Date.now()) + Math.random().toString(36).substring(2,7),
+          type: 'assert', // Using 'assert' type with specific params, or could be new 'wait' type
+          selector,
+          description: `Wait for ${tagName} (${selector}) to be visible`,
+          params: { waitType: 'isVisible', timeout: 5000 }, // Default timeout, could be editable
+        };
+        toastMessage = `Wait (For Visible) for ${selector} added.`;
+        break;
+      case 'waitForClickable':
+        newStep = {
+          id: String(Date.now()) + Math.random().toString(36).substring(2,7),
+          type: 'assert',
+          selector,
+          description: `Wait for ${tagName} (${selector}) to be clickable`,
+          params: { waitType: 'isClickable', timeout: 5000 },
+        };
+        toastMessage = `Wait (For Clickable) for ${selector} added.`;
+        break;
+    }
+
+    if (newStep) {
+      setRecordedSteps(prev => [...prev, newStep]);
+      toast({ title: "Step Added", description: toastMessage });
+    }
+    setIsElementSelectorActive(false); // Deactivate selector mode
+  }, [toast]);
 
 
   const handleSaveSession = useCallback(() => {
@@ -254,11 +355,10 @@ export function ReflectFlowOverlay() {
     toast({ title: "Step Deleted", description: "The step has been removed." });
   }, [toast]);
   
-  const popupElementInfo = useMemo(() => {
+  const popupElementInfo = useMemo((): ElementInfoForPopup => {
     if (highlightedElementDetails?.info) {
       return highlightedElementDetails.info;
     }
-    // Provide a default structure if no element is highlighted but popup might be visible
     return { id: undefined, cssSelector: 'N/A', xpath: 'N/A', tagName: 'N/A' };
   }, [highlightedElementDetails]);
 
@@ -319,6 +419,7 @@ export function ReflectFlowOverlay() {
       <ElementHoverPopup 
         elementInfo={popupElementInfo} 
         isVisible={isElementSelectorActive && !!highlightedElementDetails && isInspectorPanelVisible} 
+        onCommandSelected={handleCommandSelected}
       />
       <HighlightOverlay targetElement={isElementSelectorActive ? highlightedElementDetails?.element ?? null : null} />
     </div>
