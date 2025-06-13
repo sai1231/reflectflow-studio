@@ -2,19 +2,22 @@
 export type StepType =
   | 'navigate'
   | 'click'
+  | 'doubleClick' // Added to support inspector command
   | 'type'
+  | 'keyDown'
+  | 'keyUp'
   | 'scroll'
-  | 'waitForElement' // Used for assertions and explicit waits
-  | 'action'; // Generic action for things like doubleClick, clearValue, moveTo
+  | 'waitForElement'
+  | 'moveTo'; // Added to support inspector command
 
 // Base for all steps
 interface BaseStep {
   id: string;
   type: StepType;
   description: string;
-  selector?: string; // Primary selector, for simplicity in some contexts. Full list in selectors array.
-  selectors?: string[]; // Comprehensive list of selectors
-  target?: string; // e.g., 'main' or iframe ID
+  selectors?: string[]; // Primary selector list
+  selector?: string; // Typically the first/primary selector, for display or simple cases
+  target?: string; // e.g., 'main' or iframe ID/selector
   timeout?: number; // In milliseconds
 }
 
@@ -26,53 +29,53 @@ export interface NavigateStep extends BaseStep {
 
 export interface ClickStep extends BaseStep {
   type: 'click';
-  // selectors array from BaseStep is primary
   offsetX?: number;
   offsetY?: number;
-  button?: 'primary' | 'auxiliary' | 'secondary';
-  duration?: number;
+  duration?: number; // For simulating long presses or specific click durations
+  // button?: 'primary' | 'auxiliary' | 'secondary'; // Retained from previous, not in user JSON but common
+}
+
+export interface DoubleClickStep extends BaseStep {
+  type: 'doubleClick';
+  offsetX?: number;
+  offsetY?: number;
+  // button?: 'primary' | 'auxiliary' | 'secondary';
 }
 
 export interface TypeStep extends BaseStep {
   type: 'type';
-  value: string; // Text to type or value for 'addValue'
-  // selectors array from BaseStep is primary
-  params?: {
-    operation?: 'set' | 'add'; // For distinguishing between setValue and addValue
-  };
+  value: string; // Text to type
+}
+
+export interface KeyDownStep extends BaseStep {
+  type: 'keyDown';
+  key: string; // The key that was pressed, e.g., 'Enter', 'a', 'Shift'
+}
+
+export interface KeyUpStep extends BaseStep {
+  type: 'keyUp';
+  key: string; // The key that was released
 }
 
 export interface ScrollStep extends BaseStep {
   type: 'scroll';
-  // selectors array from BaseStep can be target element or undefined for viewport scroll
-  x?: number; // Horizontal scroll position (if viewport)
-  y?: number; // Vertical scroll position (if viewport)
-}
-
-export interface WaitForElementStepProperty {
-  name: string; // e.g., 'visible', 'enabled', 'clickable', 'existing', 'textContent', 'attribute:data-testid', 'value'
-  expectedValue: string | number | boolean;
-  operator?: '==' | '!=' | '<' | '>' | '<=' | '>=' | 'contains' | 'not-contains';
+  // If selectors are present and not 'document', it's element scroll.
+  // Otherwise, x and y are viewport scroll coordinates.
+  x?: number; // Horizontal scroll position (if viewport/document)
+  y?: number; // Vertical scroll position (if viewport/document)
 }
 
 export interface WaitForElementStep extends BaseStep {
   type: 'waitForElement';
-  // selectors array from BaseStep is primary
-  properties: WaitForElementStepProperty[]; // Defines what to assert or wait for
-  // 'waitType' can be inferred from property names or be explicit if needed
+  property?: string; // e.g., 'visible', 'enabled', 'textContent', 'attribute:data-testid', 'size.width', 'location.x'
+  operator?: '==' | '!=' | '<' | '>' | '<=' | '>=' | 'contains' | 'not-contains' | 'exists' | 'stable' | 'clickable';
+  expectedValue?: string | number | boolean; // Value to compare against for the property
 }
 
-export interface ActionStep extends BaseStep {
-  type: 'action';
-  // selectors array from BaseStep is primary
-  subAction: // Specific WebDriver classic actions
-    | 'doubleClick'
-    | 'clearValue'
-    | 'moveTo'
-    // Potentially others: dragAndDrop, contextClick, etc.
-    | 'getSize' // Could also be an assertion
-    | 'getLocation'; // Could also be an assertion
-  params?: Record<string, any>; // For additional parameters like coordinates for moveTo
+export interface MoveToStep extends BaseStep {
+  type: 'moveTo';
+  offsetX?: number; // Relative to the top-left corner of the element
+  offsetY?: number;
 }
 
 
@@ -80,8 +83,25 @@ export interface ActionStep extends BaseStep {
 export type Step =
   | NavigateStep
   | ClickStep
+  | DoubleClickStep
   | TypeStep
+  | KeyDownStep
+  | KeyUpStep
   | ScrollStep
   | WaitForElementStep
-  | ActionStep;
+  | MoveToStep;
 
+// Overall recording structure (matches the root of the user's JSON)
+export interface RecordingSession {
+  title: string;
+  description: string;
+  url: string; // Initial URL
+  steps: Step[];
+  device_screen_emulation?: {
+    width: number;
+    height: number;
+    deviceScaleFactor: number;
+    mobile: boolean;
+    userAgent: string;
+  };
+}
