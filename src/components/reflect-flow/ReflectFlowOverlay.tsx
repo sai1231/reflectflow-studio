@@ -24,6 +24,12 @@ interface ElementInfoForPopup {
   tagName?: string;
 }
 
+const PANEL_WIDTH_EXPANDED = 400;
+const PANEL_WIDTH_COLLAPSED = 160; // Adjusted for 3 icons + collapse/expand button
+const PANEL_MIN_LEFT = 16;
+const PANEL_MIN_TOP = 16;
+
+
 const generateElementInfo = (element: HTMLElement): ElementInfoForPopup => {
   let id = element.id ? `#${CSS.escape(element.id)}` : undefined;
   let cssSelector = `${element.tagName.toLowerCase()}`;
@@ -79,14 +85,103 @@ export function ReflectFlowOverlay() {
   const [currentContextMenuElementInfo, setCurrentContextMenuElementInfo] = useState<ElementInfoForPopup | null>(null);
 
   const overlayRef = useRef<HTMLDivElement>(null);
+  const panelCardRef = useRef<HTMLDivElement>(null);
   const hoverTimerRef = useRef<NodeJS.Timeout | null>(null);
   const { toast } = useToast();
+
+  const [isPanelCollapsed, setIsPanelCollapsed] = useState(false);
+  const [panelPosition, setPanelPosition] = useState<{ top: number; left: number }>({ top: PANEL_MIN_TOP, left: -9999 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStartOffset, setDragStartOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+
+  // Refs for drag handlers to access latest state
+  const isDraggingRef = useRef(isDragging);
+  useEffect(() => { isDraggingRef.current = isDragging; }, [isDragging]);
+  const dragStartOffsetRef = useRef(dragStartOffset);
+  useEffect(() => { dragStartOffsetRef.current = dragStartOffset; }, [dragStartOffset]);
+  const currentPanelPositionRef = useRef(panelPosition);
+  useEffect(() => { currentPanelPositionRef.current = panelPosition; }, [panelPosition]);
+
+
+  useEffect(() => {
+    // Initialize panel position
+    if (panelPosition.left === -9999) { // Only set initial if not already set (e.g. by dragging)
+      const initialWidth = isPanelCollapsed ? PANEL_WIDTH_COLLAPSED : PANEL_WIDTH_EXPANDED;
+      setPanelPosition({
+        top: PANEL_MIN_TOP,
+        left: Math.max(PANEL_MIN_LEFT, window.innerWidth - initialWidth - PANEL_MIN_LEFT),
+      });
+    }
+  }, [isPanelCollapsed, panelPosition.left]); // Rerun if panel collapses before initial position is set
+
+
+  const handleTogglePanelCollapse = useCallback(() => {
+    setIsPanelCollapsed(prevCollapsed => {
+        const newCollapsed = !prevCollapsed;
+        const oldWidth = newCollapsed ? PANEL_WIDTH_EXPANDED : PANEL_WIDTH_COLLAPSED;
+        const newWidth = newCollapsed ? PANEL_WIDTH_COLLAPSED : PANEL_WIDTH_EXPANDED;
+
+        setPanelPosition(currentPos => {
+            let newLeft = currentPos.left;
+            // If panel was near the right edge, try to keep its right edge aligned
+            if (currentPos.left + oldWidth >= window.innerWidth - PANEL_MIN_LEFT - 20) { // Check if right edge is close to window right edge
+                newLeft = window.innerWidth - newWidth - PANEL_MIN_LEFT;
+            }
+            
+            newLeft = Math.max(PANEL_MIN_LEFT, newLeft); // Ensure not off-screen left
+             // Ensure not off-screen right after width change
+            if (newLeft + newWidth + PANEL_MIN_LEFT > window.innerWidth) {
+                newLeft = window.innerWidth - newWidth - PANEL_MIN_LEFT;
+            }
+            return { ...currentPos, left: newLeft };
+        });
+        return newCollapsed;
+    });
+  }, []);
+
+  const handleMouseMoveDraggable = useCallback((event: MouseEvent) => {
+    if (!isDraggingRef.current) return;
+    event.preventDefault();
+
+    let newTop = event.clientY - dragStartOffsetRef.current.y;
+    let newLeft = event.clientX - dragStartOffsetRef.current.x;
+
+    // Constrain dragging within viewport
+    const panelWidth = panelCardRef.current?.offsetWidth || (isPanelCollapsed ? PANEL_WIDTH_COLLAPSED : PANEL_WIDTH_EXPANDED);
+    const panelHeight = panelCardRef.current?.offsetHeight || window.innerHeight; // Approx
+
+    newTop = Math.max(PANEL_MIN_TOP, Math.min(newTop, window.innerHeight - panelHeight - PANEL_MIN_TOP));
+    newLeft = Math.max(PANEL_MIN_LEFT, Math.min(newLeft, window.innerWidth - panelWidth - PANEL_MIN_LEFT));
+    
+    setPanelPosition({ top: newTop, left: newLeft });
+  }, [isPanelCollapsed]);
+
+  const handleMouseUpDraggable = useCallback(() => {
+    setIsDragging(false);
+    document.removeEventListener('mousemove', handleMouseMoveDraggable);
+    document.removeEventListener('mouseup', handleMouseUpDraggable);
+  }, [handleMouseMoveDraggable]);
+
+  const handleMouseDownDraggable = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    if ((event.target as HTMLElement).closest('button, input, [role="button"], [role="menuitem"]')) {
+        return; // Don't drag if clicking on an interactive element within the header
+    }
+    event.preventDefault();
+    setIsDragging(true);
+    setDragStartOffset({
+        x: event.clientX - currentPanelPositionRef.current.left,
+        y: event.clientY - currentPanelPositionRef.current.top,
+    });
+    document.addEventListener('mousemove', handleMouseMoveDraggable);
+    document.addEventListener('mouseup', handleMouseUpDraggable);
+  }, [handleMouseMoveDraggable, handleMouseUpDraggable]);
+
 
   const handleToggleRecording = useCallback(() => {
     const newIsRecording = !isRecording;
     setIsRecording(newIsRecording);
     if (newIsRecording) {
-      setIsElementSelectorActive(false); // Ensure selector is off when recording
+      setIsElementSelectorActive(false); 
       setIsElementContextMenuOpen(false);
       setInspectIconTarget(null);
       setHighlightedElementDetails(null);
@@ -105,10 +200,10 @@ export function ReflectFlowOverlay() {
   const handleClick = useCallback((event: MouseEvent) => {
     if (isElementSelectorActive || !isRecording || isElementContextMenuOpen) return;
 
-    if (overlayRef.current && overlayRef.current.contains(event.target as Node)) {
+    if (panelCardRef.current && panelCardRef.current.contains(event.target as Node)) {
       return;
     }
-
+    
     const target = event.target as HTMLElement;
     if (!target || !target.tagName || target === document.body || target === document.documentElement) {
       return;
@@ -142,7 +237,7 @@ export function ReflectFlowOverlay() {
 
 
   const handleMouseOver = useCallback((event: MouseEvent) => {
-    if (!isElementSelectorActive || isElementContextMenuOpen) return;
+    if (!isElementSelectorActive || isElementContextMenuOpen || isDraggingRef.current) return;
 
     const target = event.target as HTMLElement;
 
@@ -151,7 +246,7 @@ export function ReflectFlowOverlay() {
       return;
     }
     
-    if (overlayRef.current && overlayRef.current.contains(target)) {
+    if (panelCardRef.current && panelCardRef.current.contains(target)) {
         setInspectIconTarget(null);
         setHighlightedElementDetails(null);
         if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
@@ -175,7 +270,7 @@ export function ReflectFlowOverlay() {
   }, [isElementSelectorActive, isElementContextMenuOpen]);
 
   const handleMouseOut = useCallback(() => {
-    if (!isElementSelectorActive || isElementContextMenuOpen) return;
+    if (!isElementSelectorActive || isElementContextMenuOpen || isDraggingRef.current) return;
 
     if (hoverTimerRef.current) {
       clearTimeout(hoverTimerRef.current);
@@ -291,7 +386,6 @@ export function ReflectFlowOverlay() {
     const baseId = String(Date.now()) + Math.random().toString(36).substring(2,7);
 
     switch (command) {
-      // Actions
       case 'actionClick':
         newStep = { id: baseId, type: 'click', selector, description: `Click on ${tagName} (${selector})` };
         toastMessage = `Click action for ${selector} added.`;
@@ -320,8 +414,6 @@ export function ReflectFlowOverlay() {
         newStep = { id: baseId, type: 'action', selector, description: `Move to ${tagName} (${selector})`, params: { subAction: 'moveTo' } };
         toastMessage = `Move To action for ${selector} added.`;
         break;
-
-      // Assertions
       case 'assertIsVisible':
         newStep = { id: baseId, type: 'assert', selector, description: `Assert ${tagName} (${selector}) is visible`, params: { assertionType: 'isVisible' } };
         toastMessage = `Assertion (Is Visible) for ${selector} added.`;
@@ -350,8 +442,6 @@ export function ReflectFlowOverlay() {
         newStep = { id: baseId, type: 'assert', selector, description: `Assert location of ${tagName} (${selector})`, params: { assertionType: 'getLocation' } };
         toastMessage = `Assertion (Get Location) for ${selector} added.`;
         break;
-      
-      // Waits
       case 'waitForVisible':
         newStep = { id: baseId, type: 'assert', selector, description: `Wait for ${tagName} (${selector}) to be visible`, params: { waitType: 'isVisible', timeout: 5000 } };
         toastMessage = `Wait (For Visible) for ${selector} added.`;
@@ -415,21 +505,42 @@ export function ReflectFlowOverlay() {
     toast({ title: "Step Deleted", description: "The step has been removed." });
   }, [toast]);
 
+  const panelWidthClass = isPanelCollapsed ? `w-[${PANEL_WIDTH_COLLAPSED}px]` : `w-[${PANEL_WIDTH_EXPANDED}px]`;
+
+  if (panelPosition.left === -9999) { // Still calculating initial position
+    return null; // Or a loading spinner
+  }
 
   return (
-    <div ref={overlayRef} className="fixed top-0 right-0 h-full p-4 flex flex-col items-end z-[1000] pointer-events-none">
-      <Card className="w-[400px] h-full flex flex-col shadow-2xl pointer-events-auto overflow-hidden bg-card/90 backdrop-blur-sm">
-        <CardHeader className="p-4 border-b">
+    <div 
+      ref={overlayRef} 
+      className="fixed z-[10000] pointer-events-none" // Increased z-index
+      style={{ 
+        top: `${panelPosition.top}px`, 
+        left: `${panelPosition.left}px`,
+      }}
+    >
+      <Card 
+        ref={panelCardRef}
+        className={`h-full max-h-[calc(100vh-32px)] flex flex-col shadow-2xl pointer-events-auto overflow-hidden bg-card/90 backdrop-blur-sm transition-[width] duration-300 ease-in-out ${panelWidthClass}`}
+      >
+        <CardHeader 
+          className="p-4 border-b cursor-grab"
+          onMouseDown={handleMouseDownDraggable}
+        >
           <div className="flex justify-between items-center">
-            <div className="flex items-center space-x-2">
-              <FileIcon className="h-6 w-6 text-primary" />
-              <div>
-                <CardTitle className="text-xl font-headline">ReflectFlow Panel</CardTitle>
-                <CardDescription className="text-xs">Record & Playback UI Interactions</CardDescription>
+             {!isPanelCollapsed && (
+              <div className="flex items-center space-x-2">
+                <FileIcon className="h-6 w-6 text-primary" />
+                <div>
+                  <CardTitle className="text-xl font-headline">ReflectFlow</CardTitle>
+                  <CardDescription className="text-xs">Record & Playback UI Interactions</CardDescription>
+                </div>
               </div>
-            </div>
+            )}
+            {isPanelCollapsed && <div className="w-6 h-6"></div>} {/* Placeholder for alignment when collapsed */}
           </div>
-          <div className="mt-4">
+          <div className={`mt-4 ${isPanelCollapsed ? 'flex justify-center' : ''}`}>
             <HeaderControls
               isRecording={isRecording}
               onToggleRecording={handleToggleRecording}
@@ -437,37 +548,43 @@ export function ReflectFlowOverlay() {
               stepCount={recordedSteps.length}
               isElementSelectorActive={isElementSelectorActive}
               onToggleElementSelector={handleToggleElementSelector}
+              isPanelCollapsed={isPanelCollapsed}
+              onTogglePanelCollapse={handleTogglePanelCollapse}
             />
           </div>
         </CardHeader>
-        <CardContent className="flex-grow p-0 overflow-hidden relative">
-          <div className="h-full">
-            <StepList
-              steps={recordedSteps}
-              selectedSteps={selectedSteps}
-              onSelectStep={handleSelectStep}
-              onUpdateStep={handleUpdateStep}
-              onDeleteStep={handleDeleteStep}
-            />
-          </div>
-        </CardContent>
-        {recordedSteps.length > 0 && (
-          <CardFooter className="p-3 border-t flex-col items-start space-y-2">
-            <div className="flex justify-between w-full items-center">
-              <Button onClick={handleSelectAllSteps} variant="ghost" size="sm" className="text-xs">
-                {selectedSteps.length === recordedSteps.length ? <CheckboxSquareIcon className="mr-2 h-4 w-4" /> : <CheckboxUncheckedIcon className="mr-2 h-4 w-4" />}
-                {selectedSteps.length === recordedSteps.length ? 'Deselect All' : 'Select All'} ({selectedSteps.length}/{recordedSteps.length})
-              </Button>
-              <Button onClick={handlePlaySelected} variant="default" size="sm" disabled={selectedSteps.length === 0 || isRecording} className="bg-accent hover:bg-accent/90 text-accent-foreground">
-                <PlayIcon className="mr-2 h-4 w-4" />
-                Play Selected ({selectedSteps.length})
-              </Button>
-            </div>
-          </CardFooter>
+        {!isPanelCollapsed && (
+          <>
+            <CardContent className="flex-grow p-0 overflow-hidden relative">
+              <div className="h-full">
+                <StepList
+                  steps={recordedSteps}
+                  selectedSteps={selectedSteps}
+                  onSelectStep={handleSelectStep}
+                  onUpdateStep={handleUpdateStep}
+                  onDeleteStep={handleDeleteStep}
+                />
+              </div>
+            </CardContent>
+            {recordedSteps.length > 0 && (
+              <CardFooter className="p-3 border-t flex-col items-start space-y-2">
+                <div className="flex justify-between w-full items-center">
+                  <Button onClick={handleSelectAllSteps} variant="ghost" size="sm" className="text-xs">
+                    {selectedSteps.length === recordedSteps.length ? <CheckboxSquareIcon className="mr-2 h-4 w-4" /> : <CheckboxUncheckedIcon className="mr-2 h-4 w-4" />}
+                    {selectedSteps.length === recordedSteps.length ? 'Deselect All' : 'Select All'} ({selectedSteps.length}/{recordedSteps.length})
+                  </Button>
+                  <Button onClick={handlePlaySelected} variant="default" size="sm" disabled={selectedSteps.length === 0 || isRecording} className="bg-accent hover:bg-accent/90 text-accent-foreground">
+                    <PlayIcon className="mr-2 h-4 w-4" />
+                    Play Selected ({selectedSteps.length})
+                  </Button>
+                </div>
+              </CardFooter>
+            )}
+          </>
         )}
       </Card>
 
-      {isElementSelectorActive && inspectIconTarget && !isElementContextMenuOpen && (() => {
+      {isElementSelectorActive && inspectIconTarget && !isElementContextMenuOpen && !isDragging && (() => {
           const rect = inspectIconTarget.getBoundingClientRect();
           const iconSize = 32; 
           let iconTop = rect.top + rect.height / 2 - iconSize / 2;
@@ -496,13 +613,13 @@ export function ReflectFlowOverlay() {
 
       <ElementHoverPopup
         elementInfo={currentContextMenuElementInfo}
-        isOpen={isElementContextMenuOpen && !!currentContextMenuElementInfo}
+        isOpen={isElementContextMenuOpen && !!currentContextMenuElementInfo && !isDragging}
         onCommandSelected={handleCommandSelected}
         position={contextMenuPosition}
         onClose={closeElementContextMenu}
       />
       
-      <HighlightOverlay targetElement={isElementSelectorActive ? (highlightedElementDetails?.element ?? null) : null} />
+      <HighlightOverlay targetElement={isElementSelectorActive && !isDragging ? (highlightedElementDetails?.element ?? null) : null} />
     </div>
   );
 }

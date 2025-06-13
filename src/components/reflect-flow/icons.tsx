@@ -37,7 +37,7 @@ import {
   WholeWord, // For getText
   ListChecks, // General for some assertions
   Sigma, // For computed values or properties
-  Maximize2, // For getSize
+  Maximize2, // For getSize & Expand
   Tags, // For getTagName
   LocateFixed, // For getLocation
   FileCode, // For getHTML
@@ -48,7 +48,9 @@ import {
   ALargeSmall, // For selectByVisibleText / selectByAttribute (could be better)
   Replace, // For setValue if different from TypeActionIcon context
   Sparkles, // For execute/executeAsync
-
+  PanelRightClose, // For collapsing the panel
+  PanelLeftOpen, // For expanding the panel
+  MinusSquare, // Could be an alternative for collapse
 } from 'lucide-react';
 
 export const RecordIcon = CircleDot;
@@ -103,3 +105,7 @@ export const SetValueIcon = Replace; // Or TypeActionIcon depending on context
 export const ExecuteScriptIcon = Sparkles;
 export const DoubleClickIcon = MousePointer2; // Could use a variant if available or custom SVG
 export const DragAndDropIcon = Move; // Re-using, or custom SVG needed for distinct visual
+
+// Panel collapse/expand icons
+export const CollapsePanelIcon = PanelRightClose;
+export const ExpandPanelIcon = PanelLeftOpen;
