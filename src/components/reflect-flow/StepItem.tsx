@@ -1,3 +1,4 @@
+
 "use client";
 
 import type React from 'react';
@@ -54,9 +55,6 @@ export function StepItem({ step, isSelected, onSelect, onUpdateStep, onDeleteSte
   const [editableStep, setEditableStep] = useState<Step>(() => JSON.parse(JSON.stringify(step)));
 
   useEffect(() => {
-    // If not in editing mode, keep editableStep synced with the prop step
-    // This is important if the step is updated externally (e.g. by another process)
-    // or if the component is re-rendered with a new step prop for the same item (though less likely with proper keys)
     if (!isEditing) {
       setEditableStep(JSON.parse(JSON.stringify(step)));
     }
@@ -91,10 +89,8 @@ export function StepItem({ step, isSelected, onSelect, onUpdateStep, onDeleteSte
       if (index < newSelectors.length) {
         newSelectors[index] = value;
       } else {
-         // This case should ideally be handled by an "add selector" button
-        newSelectors[index] = value; // Or push if appropriate
+        newSelectors[index] = value; 
       }
-      // Ensure the primary selector (display selector) is updated if it's the first one
       const primarySelector = newSelectors[0] || '';
       return { ...prev, selectors: newSelectors, selector: primarySelector };
     });
@@ -111,29 +107,36 @@ export function StepItem({ step, isSelected, onSelect, onUpdateStep, onDeleteSte
     });
   };
 
+  const handleSaveChanges = () => {
+    let finalStep = { ...editableStep };
+    if (finalStep.selectors && finalStep.selectors.length > 0) {
+      finalStep.selector = finalStep.selectors[0];
+    } else if (finalStep.selector && (!finalStep.selectors || finalStep.selectors.length === 0)) {
+      finalStep.selectors = [finalStep.selector];
+    }
+    onUpdateStep(finalStep);
+    setIsEditing(false); 
+  };
 
-  const toggleEdit = () => {
+  const toggleEditMode = () => {
     if (isEditing) {
-      // Saving changes
-      let finalStep = { ...editableStep };
-      if (finalStep.selectors && finalStep.selectors.length > 0) {
-        finalStep.selector = finalStep.selectors[0];
-      } else if (finalStep.selector && (!finalStep.selectors || finalStep.selectors.length === 0)) {
-        finalStep.selectors = [finalStep.selector];
-      }
-      onUpdateStep(finalStep);
-      setIsEditing(false); 
+      // If currently editing, "Cancel Edit" means discarding changes and exiting edit mode.
+      // For a true cancel, we should revert editableStep to the original 'step' prop.
+      setEditableStep(JSON.parse(JSON.stringify(step))); // Revert to original
+      setIsEditing(false);
     } else {
       // Entering edit mode
-      // Ensure editableStep is a fresh, deep copy of the current prop step
-      setEditableStep(JSON.parse(JSON.stringify(step)));
+      setEditableStep(JSON.parse(JSON.stringify(step))); // Ensure fresh copy
       setIsEditing(true);
     }
   };
   
+  const handleDelete = () => {
+    onDeleteStep(editableStep.id);
+  };
+
   const renderStepDetails = () => {
-    // Use editableStep for display consistency, as it reflects prop step when not editing
-    const currentDisplayStep = editableStep;
+    const currentDisplayStep = editableStep; // Use editableStep for display consistency
     const primarySelector = currentDisplayStep.selector || (currentDisplayStep.selectors && currentDisplayStep.selectors[0]) || 'N/A';
     switch (currentDisplayStep.type) {
       case 'navigate':
@@ -156,7 +159,7 @@ export function StepItem({ step, isSelected, onSelect, onUpdateStep, onDeleteSte
         const wfes = currentDisplayStep as WaitForElementStep;
         if (wfes.properties && wfes.properties.length > 0) {
           const prop = wfes.properties[0];
-          return <p className="text-xs text-muted-foreground truncate" title={`${prop.name} ${prop.operator || 'is'} ${String(prop.expectedValue)} on ${primarySelector}`}>Assert: {prop.name} {prop.operator || 'is'} "{String(prop.expectedValue)}" on "{primarySelector}"</p>;
+          return <p className="text-xs text-muted-foreground truncate" title={`${prop.name} ${prop.operator || 'is'} ${String(prop.expectedValue)} on ${primarySelector}`}>Assert: {prop.name} ${prop.operator || 'is'} "${String(prop.expectedValue)}" on "{primarySelector}"</p>;
         }
         return <p className="text-xs text-muted-foreground truncate" title={primarySelector}>WaitFor: {primarySelector}</p>;
       case 'action':
@@ -197,7 +200,6 @@ export function StepItem({ step, isSelected, onSelect, onUpdateStep, onDeleteSte
             onChange={(e) => handleSelectorChange(0, e.target.value)}
             className="text-sm h-8 mt-1"
           />
-          {/* TODO: Add UI for managing multiple selectors */}
         </div>
       )}
 
@@ -237,7 +239,6 @@ export function StepItem({ step, isSelected, onSelect, onUpdateStep, onDeleteSte
          </div>
       )}
 
-
       {editableStep.type === 'waitForElement' && (editableStep as WaitForElementStep).properties && (editableStep as WaitForElementStep).properties.map((prop, index) => (
         <div key={index} className="space-y-2 p-2 border rounded-md bg-background/50">
           <p className="text-xs font-semibold">Assertion/Wait Property {index + 1}</p>
@@ -256,9 +257,8 @@ export function StepItem({ step, isSelected, onSelect, onUpdateStep, onDeleteSte
             <Input
               id={`propValue-${editableStep.id}-${index}`}
               placeholder="Expected value"
-              value={String(prop.expectedValue)} // Ensure value is string for input
+              value={String(prop.expectedValue)}
               onChange={(e) => {
-                // Attempt to convert back to original type, simple conversion for now
                 let val: string | number | boolean = e.target.value;
                 if (typeof prop.expectedValue === 'boolean') val = e.target.value === 'true';
                 else if (typeof prop.expectedValue === 'number') val = parseFloat(e.target.value) || 0;
@@ -267,7 +267,6 @@ export function StepItem({ step, isSelected, onSelect, onUpdateStep, onDeleteSte
               className="text-sm h-8 mt-1"
             />
           </div>
-          {/* TODO: Add operator dropdown */}
         </div>
       ))}
        {editableStep.timeout !== undefined && (
@@ -284,8 +283,7 @@ export function StepItem({ step, isSelected, onSelect, onUpdateStep, onDeleteSte
          </div>
        )}
 
-      {/* Button to save changes explicitly within the edit UI */}
-      <Button onClick={toggleEdit} size="sm" variant="default" className="h-8 mt-2">
+      <Button onClick={handleSaveChanges} size="sm" variant="default" className="h-8 mt-2">
         <SaveIcon className="mr-1 h-3 w-3" /> Save Changes
       </Button>
     </div>
@@ -319,17 +317,24 @@ export function StepItem({ step, isSelected, onSelect, onUpdateStep, onDeleteSte
             
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-8 w-8 flex-shrink-0" aria-label="More options">
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  className="h-8 w-8 flex-shrink-0" 
+                  aria-label="More options"
+                  onClick={() => {
+                    console.log(`DropdownMenuTrigger button clicked for step: ${editableStep.id} - ${editableStep.description}`);
+                  }}
+                >
                   <MoreOptionsIcon className="h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem onSelect={toggleEdit} disabled={isEditing && false /* Allow saving from menu item too if desired, but primary save is inline now */}>
+                <DropdownMenuItem onSelect={toggleEditMode}>
                   <EditIcon className="mr-2 h-4 w-4" />
                   {isEditing ? 'Cancel Edit' : 'Edit Step'} 
-                  {/* Changed "Save Changes" to "Cancel Edit" if inline save button is primary */}
                 </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => onDeleteStep(editableStep.id)} className="text-destructive focus:text-destructive focus:bg-destructive/10">
+                <DropdownMenuItem onSelect={handleDelete} className="text-destructive focus:text-destructive focus:bg-destructive/10">
                   <DeleteIcon className="mr-2 h-4 w-4" />
                   Delete Step
                 </DropdownMenuItem>
@@ -343,3 +348,5 @@ export function StepItem({ step, isSelected, onSelect, onUpdateStep, onDeleteSte
     </TooltipProvider>
   );
 }
+
+    
