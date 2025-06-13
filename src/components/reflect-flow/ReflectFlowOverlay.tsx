@@ -73,9 +73,11 @@ export function ReflectFlowOverlay() {
 
   const [highlightedElementDetails, setHighlightedElementDetails] = useState<ElementDetails | null>(null);
   const [inspectIconTarget, setInspectIconTarget] = useState<HTMLElement | null>(null);
-  const [isElementContextPopupOpen, setIsElementContextPopupOpen] = useState(false);
-  const [popupAnchorPosition, setPopupAnchorPosition] = useState<{ top: number; left: number } | null>(null);
-  const [currentPopupElementInfo, setCurrentPopupElementInfo] = useState<ElementInfoForPopup | null>(null);
+  
+  // State for the new multi-level context menu (formerly ElementHoverPopup)
+  const [isElementContextMenuOpen, setIsElementContextMenuOpen] = useState(false);
+  const [contextMenuPosition, setContextMenuPosition] = useState<{ top: number; left: number } | null>(null);
+  const [currentContextMenuElementInfo, setCurrentContextMenuElementInfo] = useState<ElementInfoForPopup | null>(null);
 
   const overlayRef = useRef<HTMLDivElement>(null);
   const hoverTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -86,7 +88,7 @@ export function ReflectFlowOverlay() {
     setIsRecording(newIsRecording);
     if (newIsRecording) {
       setIsElementSelectorActive(false);
-      setIsElementContextPopupOpen(false);
+      setIsElementContextMenuOpen(false);
       setInspectIconTarget(null);
       setHighlightedElementDetails(null);
       toast({
@@ -102,7 +104,7 @@ export function ReflectFlowOverlay() {
   }, [isRecording, toast]);
 
   const handleClick = useCallback((event: MouseEvent) => {
-    if (isElementSelectorActive || !isRecording || isElementContextPopupOpen) return;
+    if (isElementSelectorActive || !isRecording || isElementContextMenuOpen) return;
 
     if (overlayRef.current && overlayRef.current.contains(event.target as Node)) {
       return;
@@ -126,10 +128,10 @@ export function ReflectFlowOverlay() {
 
     setRecordedSteps(prevSteps => [...prevSteps, newStep]);
     toast({ title: "Action Recorded", description: `Recorded: ${newStep.description}` });
-  }, [toast, isElementSelectorActive, isRecording, isElementContextPopupOpen]);
+  }, [toast, isElementSelectorActive, isRecording, isElementContextMenuOpen]);
 
   useEffect(() => {
-    if (isRecording && !isElementSelectorActive && !isElementContextPopupOpen) {
+    if (isRecording && !isElementSelectorActive && !isElementContextMenuOpen) {
       document.addEventListener('click', handleClick, true);
     } else {
       document.removeEventListener('click', handleClick, true);
@@ -137,11 +139,11 @@ export function ReflectFlowOverlay() {
     return () => {
       document.removeEventListener('click', handleClick, true);
     };
-  }, [isRecording, handleClick, isElementSelectorActive, isElementContextPopupOpen]);
+  }, [isRecording, handleClick, isElementSelectorActive, isElementContextMenuOpen]);
 
 
   const handleMouseOver = useCallback((event: MouseEvent) => {
-    if (!isElementSelectorActive || isElementContextPopupOpen) return;
+    if (!isElementSelectorActive || isElementContextMenuOpen) return;
 
     const target = event.target as HTMLElement;
 
@@ -149,7 +151,7 @@ export function ReflectFlowOverlay() {
       if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
       return;
     }
-
+    
     if (overlayRef.current && overlayRef.current.contains(target)) {
         setInspectIconTarget(null);
         setHighlightedElementDetails(null);
@@ -171,62 +173,48 @@ export function ReflectFlowOverlay() {
       setHighlightedElementDetails({ element: target, info: generateElementInfo(target) });
       setInspectIconTarget(target);
     }, 500);
-  }, [isElementSelectorActive, isElementContextPopupOpen]);
+  }, [isElementSelectorActive, isElementContextMenuOpen]);
 
-  const handleMouseOut = useCallback((event: MouseEvent) => {
-    if (!isElementSelectorActive || isElementContextPopupOpen) return;
+  const handleMouseOut = useCallback(() => {
+    if (!isElementSelectorActive || isElementContextMenuOpen) return;
 
     if (hoverTimerRef.current) {
       clearTimeout(hoverTimerRef.current);
       hoverTimerRef.current = null;
     }
-  }, [isElementSelectorActive, isElementContextPopupOpen]);
+  }, [isElementSelectorActive, isElementContextMenuOpen]);
 
 
   const handleInspectIconClick = useCallback((event: React.MouseEvent, pageElement: HTMLElement) => {
     event.stopPropagation();
 
-    const elementInfoForPopup = highlightedElementDetails && highlightedElementDetails.element === pageElement
+    const elementInfoForMenu = highlightedElementDetails && highlightedElementDetails.element === pageElement
       ? highlightedElementDetails.info
       : generateElementInfo(pageElement);
 
-    setCurrentPopupElementInfo(elementInfoForPopup);
+    setCurrentContextMenuElementInfo(elementInfoForMenu);
 
+    // Position the menu near the click event (icon's position)
     const iconRect = (event.currentTarget as HTMLElement).getBoundingClientRect();
-    const popupWidth = 384; 
-    const popupHeight = 350;
-
-    let left = iconRect.left + iconRect.width / 2 - popupWidth / 2;
-    let top = iconRect.bottom + 10;
-
-    if (left < 10) left = 10;
-    if (left + popupWidth > window.innerWidth - 10) {
-        left = window.innerWidth - popupWidth - 10;
-    }
-    if (top + popupHeight > window.innerHeight - 10) {
-        top = iconRect.top - popupHeight - 10;
-    }
-    if (top < 10) {
-        top = Math.max(10, window.innerHeight - popupHeight - 10);
-    }
-
-    setPopupAnchorPosition({ top, left });
-    setIsElementContextPopupOpen(true);
-    setInspectIconTarget(null);
+    setContextMenuPosition({ top: iconRect.bottom + 5, left: iconRect.left });
+    
+    setIsElementContextMenuOpen(true);
+    setInspectIconTarget(null); // Hide icon once menu is open
+    setHighlightedElementDetails(null); // Hide highlight once menu is open
   }, [highlightedElementDetails]);
 
-  const closeElementContextPopup = useCallback(() => {
-    setIsElementContextPopupOpen(false);
-    setCurrentPopupElementInfo(null);
-    setHighlightedElementDetails(null);
-    setInspectIconTarget(null);
+  const closeElementContextMenu = useCallback(() => {
+    setIsElementContextMenuOpen(false);
+    setCurrentContextMenuElementInfo(null);
+    setHighlightedElementDetails(null); // Clear highlight when menu closes
+    setInspectIconTarget(null); // Clear icon when menu closes
   }, []);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
-        if (isElementContextPopupOpen) {
-          closeElementContextPopup();
+        if (isElementContextMenuOpen) {
+          closeElementContextMenu();
         } else if (isElementSelectorActive) {
           setIsElementSelectorActive(false);
           toast({ title: "Element Selector Deactivated", description: "Pressed ESC key."});
@@ -236,7 +224,7 @@ export function ReflectFlowOverlay() {
 
     if (isElementSelectorActive) {
       document.addEventListener('keydown', handleKeyDown);
-      if (!isElementContextPopupOpen) {
+      if (!isElementContextMenuOpen) { // Only attach hover listeners if menu is not open
         document.addEventListener('mouseover', handleMouseOver);
         document.addEventListener('mouseout', handleMouseOut);
       } else {
@@ -252,8 +240,8 @@ export function ReflectFlowOverlay() {
 
       setHighlightedElementDetails(null);
       setInspectIconTarget(null);
-      setIsElementContextPopupOpen(false);
-      setCurrentPopupElementInfo(null);
+      setIsElementContextMenuOpen(false); // Ensure menu is closed when selector is off
+      setCurrentContextMenuElementInfo(null);
     }
 
     return () => {
@@ -262,7 +250,7 @@ export function ReflectFlowOverlay() {
       document.removeEventListener('keydown', handleKeyDown);
       if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
     };
-  }, [isElementSelectorActive, isElementContextPopupOpen, handleMouseOver, handleMouseOut, toast, closeElementContextPopup]);
+  }, [isElementSelectorActive, isElementContextMenuOpen, handleMouseOver, handleMouseOut, toast, closeElementContextMenu]);
 
 
   const handlePlayAll = useCallback(() => {
@@ -285,13 +273,13 @@ export function ReflectFlowOverlay() {
     const newIsActive = !isElementSelectorActive;
     setIsElementSelectorActive(newIsActive);
     if (newIsActive) {
-      setIsRecording(false);
+      setIsRecording(false); // Pause recording if selector is active
       setHighlightedElementDetails(null);
       setInspectIconTarget(null);
-      setIsElementContextPopupOpen(false);
+      setIsElementContextMenuOpen(false); // Ensure menu is closed when selector activates
       toast({
         title: "Element Selector Activated",
-        description: "Hover over elements. Click target icon to inspect. Press ESC to deactivate.",
+        description: "Hover over elements. Click target icon to open actions. Press ESC to deactivate.",
       });
     } else {
       toast({
@@ -308,11 +296,22 @@ export function ReflectFlowOverlay() {
     let toastMessage = "";
     const baseId = String(Date.now()) + Math.random().toString(36).substring(2,7);
 
+    // Normalize command by removing "action", "assert", or "waitFor" prefix if present
+    const actionType = command.startsWith('action') ? command.substring('action'.length) :
+                       command.startsWith('assert') ? command.substring('assert'.length) :
+                       command.startsWith('waitFor') ? command.substring('waitFor'.length) : command;
+    const actionTypeLower = actionType.charAt(0).toLowerCase() + actionType.slice(1);
+
+
     switch (command) {
       // Actions
       case 'actionClick':
         newStep = { id: baseId, type: 'click', selector, description: `Click on ${tagName} (${selector})` };
         toastMessage = `Click action for ${selector} added.`;
+        break;
+      case 'actionDoubleClick':
+        newStep = { id: baseId, type: 'action', selector, description: `Double Click ${tagName} (${selector})`, params: { subAction: 'doubleClick' } };
+        toastMessage = `Double Click action for ${selector} added.`;
         break;
       case 'actionSetValue':
         newStep = { id: baseId, type: 'type', selector, value: '', description: `Set Value in ${tagName} (${selector})` };
@@ -329,6 +328,10 @@ export function ReflectFlowOverlay() {
       case 'actionScrollIntoView':
         newStep = { id: baseId, type: 'scroll', selector, description: `Scroll ${tagName} (${selector}) into view` };
         toastMessage = `Scroll Into View action for ${selector} added.`;
+        break;
+      case 'actionMoveTo':
+        newStep = { id: baseId, type: 'action', selector, description: `Move to ${tagName} (${selector})`, params: { subAction: 'moveTo' } };
+        toastMessage = `Move To action for ${selector} added.`;
         break;
 
       // Assertions
@@ -352,7 +355,15 @@ export function ReflectFlowOverlay() {
         newStep = { id: baseId, type: 'assert', selector, description: `Assert ${tagName} (${selector}) exists`, params: { assertionType: 'isExisting' } };
         toastMessage = `Assertion (Is Existing) for ${selector} added.`;
         break;
-
+      case 'assertGetSize':
+        newStep = { id: baseId, type: 'assert', selector, description: `Assert size of ${tagName} (${selector})`, params: { assertionType: 'getSize' } };
+        toastMessage = `Assertion (Get Size) for ${selector} added.`;
+        break;
+      case 'assertGetLocation':
+        newStep = { id: baseId, type: 'assert', selector, description: `Assert location of ${tagName} (${selector})`, params: { assertionType: 'getLocation' } };
+        toastMessage = `Assertion (Get Location) for ${selector} added.`;
+        break;
+      
       // Waits
       case 'waitForVisible':
         newStep = { id: baseId, type: 'assert', selector, description: `Wait for ${tagName} (${selector}) to be visible`, params: { waitType: 'isVisible', timeout: 5000 } };
@@ -370,15 +381,22 @@ export function ReflectFlowOverlay() {
         newStep = { id: baseId, type: 'assert', selector, description: `Wait for ${tagName} (${selector}) to exist`, params: { waitType: 'isExisting', timeout: 5000 } };
         toastMessage = `Wait (For Exist) for ${selector} added.`;
         break;
+      case 'waitForStable':
+        newStep = { id: baseId, type: 'assert', selector, description: `Wait for ${tagName} (${selector}) to be stable`, params: { waitType: 'isStable', timeout: 5000 } };
+        toastMessage = `Wait (For Stable) for ${selector} added.`;
+        break;
+      default:
+        toastMessage = `Unknown command: ${command}`;
+        console.warn(toastMessage);
+        break;
     }
 
     if (newStep) {
       setRecordedSteps(prev => [...prev, newStep]);
       toast({ title: "Step Added", description: toastMessage });
     }
-
-    closeElementContextPopup();
-  }, [toast, closeElementContextPopup]);
+    closeElementContextMenu(); // Close context menu after command selection
+  }, [toast, closeElementContextMenu]);
 
 
   const handleSaveSession = useCallback(() => {
@@ -463,18 +481,20 @@ export function ReflectFlowOverlay() {
         )}
       </Card>
 
-      {isElementSelectorActive && inspectIconTarget && !isElementContextPopupOpen && (() => {
+      {/* Clickable Target Icon */}
+      {isElementSelectorActive && inspectIconTarget && !isElementContextMenuOpen && (() => {
           const rect = inspectIconTarget.getBoundingClientRect();
-          const iconSize = 32;
+          const iconSize = 32; 
           let iconTop = rect.top + rect.height / 2 - iconSize / 2;
           let iconLeft = rect.left + rect.width / 2 - iconSize / 2;
 
+          // Clamp position to be within viewport (with some padding)
           iconTop = Math.max(8, Math.min(iconTop, window.innerHeight - iconSize - 8));
           iconLeft = Math.max(8, Math.min(iconLeft, window.innerWidth - iconSize - 8));
-
+          
           return (
               <Button
-                  data-reflectflow-icon="true"
+                  data-reflectflow-icon="true" // Prevents icon from being inspected
                   variant="outline"
                   size="icon"
                   className="fixed h-8 w-8 bg-background shadow-lg rounded-full p-0 z-[10001] pointer-events-auto"
@@ -490,14 +510,17 @@ export function ReflectFlowOverlay() {
           );
       })()}
 
+      {/* Multi-level Dropdown Menu (formerly ElementHoverPopup) */}
       <ElementHoverPopup
-        elementInfo={currentPopupElementInfo}
-        isOpen={isElementContextPopupOpen && !!currentPopupElementInfo}
+        elementInfo={currentContextMenuElementInfo}
+        isOpen={isElementContextMenuOpen && !!currentContextMenuElementInfo}
         onCommandSelected={handleCommandSelected}
-        position={popupAnchorPosition}
-        onClose={closeElementContextPopup}
+        position={contextMenuPosition}
+        onClose={closeElementContextMenu}
       />
+      
       <HighlightOverlay targetElement={isElementSelectorActive ? (highlightedElementDetails?.element ?? null) : null} />
     </div>
   );
 }
+
