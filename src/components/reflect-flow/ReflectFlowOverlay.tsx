@@ -413,7 +413,7 @@ export function ReflectFlowOverlay() {
         toastMessage = `Scroll Into View action for ${primarySelector} added.`;
         break;
       case 'actionMoveTo':
-        newStep = { id: baseId, type: 'action', subAction: 'moveTo', selectors: allSelectors, selector: primarySelector, description: `Move to ${tagName} (${primarySelector})` } as ActionStep;
+        newStep = { id: baseId, type: 'action', subAction: 'moveTo', selectors: allSelectors, selector: primarySelector, description: `Move to ${tagName} (${primarySelector})`, params: { x:0, y:0 } } as ActionStep;
         toastMessage = `Move To action for ${primarySelector} added.`;
         break;
 
@@ -440,12 +440,12 @@ export function ReflectFlowOverlay() {
         toastMessage = `Assertion (Is Existing) for ${primarySelector} added.`;
         break;
       case 'assertGetSize':
-         newStep = { id: baseId, type: 'action', subAction: 'getSize', selectors: allSelectors, selector: primarySelector, description: `Get size of ${tagName} (${primarySelector})` } as ActionStep; // Or use waitForElement with properties
-        toastMessage = `Action (Get Size) for ${primarySelector} added. (Verification TBD)`;
+         newStep = { id: baseId, type: 'waitForElement', selectors: allSelectors, selector: primarySelector, description: `Get size of ${tagName} (${primarySelector})`, properties: [createProperty('size.width', 0, '=='), createProperty('size.height', 0, '==')] } as WaitForElementStep;
+        toastMessage = `Assertion (Get Size) for ${primarySelector} added. Edit expected values.`;
         break;
       case 'assertGetLocation':
-        newStep = { id: baseId, type: 'action', subAction: 'getLocation', selectors: allSelectors, selector: primarySelector, description: `Get location of ${tagName} (${primarySelector})` } as ActionStep; // Or use waitForElement
-        toastMessage = `Action (Get Location) for ${primarySelector} added. (Verification TBD)`;
+        newStep = { id: baseId, type: 'waitForElement', selectors: allSelectors, selector: primarySelector, description: `Get location of ${tagName} (${primarySelector})`, properties: [createProperty('location.x', 0, '=='), createProperty('location.y', 0, '==')] } as WaitForElementStep;
+        toastMessage = `Assertion (Get Location) for ${primarySelector} added. Edit expected values.`;
         break;
         
       // Waits (waitForElement)

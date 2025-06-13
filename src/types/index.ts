@@ -84,3 +84,4 @@ export type Step =
   | ScrollStep
   | WaitForElementStep
   | ActionStep;
+
