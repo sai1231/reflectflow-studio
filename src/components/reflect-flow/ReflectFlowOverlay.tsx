@@ -8,17 +8,30 @@ import { Button } from '@/components/ui/button';
 import { HeaderControls } from './HeaderControls';
 import { StepList } from './StepList';
 import { ElementHoverPopup } from './ElementHoverPopup';
+import { HighlightOverlay } from './HighlightOverlay'; // Added
 import { useToast } from '@/hooks/use-toast';
 import { PlayIcon, CheckboxSquareIcon, CheckboxUncheckedIcon, FileIcon } from './icons';
+
+interface ElementDetails {
+  element: HTMLElement;
+  info: {
+    id?: string;
+    cssSelector?: string;
+    xpath?: string;
+    tagName?: string;
+  };
+}
 
 export function ReflectFlowOverlay() {
   const [isRecording, setIsRecording] = useState(false);
   const [recordedSteps, setRecordedSteps] = useState<Step[]>([]);
   const [selectedSteps, setSelectedSteps] = useState<string[]>([]);
-  const [isPopupVisible, setIsPopupVisible] = useState(false);
-  const [isElementSelectorActive, setIsElementSelectorActive] = useState(false); // Added state for element selector
-  const overlayRef = useRef<HTMLDivElement>(null);
+  const [isInspectorPanelVisible, setIsInspectorPanelVisible] = useState(false); // Renamed for clarity
+  const [isElementSelectorActive, setIsElementSelectorActive] = useState(false);
+  const [highlightedElementDetails, setHighlightedElementDetails] = useState<ElementDetails | null>(null); // For hover inspect
 
+  const overlayRef = useRef<HTMLDivElement>(null);
+  const hoverTimerRef = useRef<NodeJS.Timeout | null>(null);
   const { toast } = useToast();
 
   const handleToggleRecording = useCallback(() => {
@@ -38,6 +51,8 @@ export function ReflectFlowOverlay() {
   }, [isRecording, toast]);
 
   const handleClick = useCallback((event: MouseEvent) => {
+    if (isElementSelectorActive) return; // Don't record clicks if selector is active
+
     if (overlayRef.current && overlayRef.current.contains(event.target as Node)) {
       return;
     }
@@ -80,7 +95,7 @@ export function ReflectFlowOverlay() {
 
     setRecordedSteps(prevSteps => [...prevSteps, newStep]);
     toast({ title: "Action Recorded", description: `Recorded: ${newStep.description}` });
-  }, [toast]); 
+  }, [toast, isElementSelectorActive]); 
 
   useEffect(() => {
     if (isRecording) {
@@ -92,6 +107,89 @@ export function ReflectFlowOverlay() {
       document.removeEventListener('click', handleClick, true);
     };
   }, [isRecording, handleClick]);
+
+
+  // Element Selector Logic
+  const generateElementInfo = (element: HTMLElement) => {
+    let id = element.id ? `#${element.id}` : undefined;
+    let cssSelector = `${element.tagName.toLowerCase()}`;
+    if (element.classList.length > 0) {
+      cssSelector += `.${Array.from(element.classList).filter(c => c.trim() !== '').map(c => CSS.escape(c)).join('.')}`;
+    }
+    // Simplified XPath
+    let xpath = `//${element.tagName.toLowerCase()}`;
+    if (element.id) {
+      xpath += `[@id='${CSS.escape(element.id)}']`;
+    }
+    return {
+      id: element.id || undefined,
+      cssSelector: id || cssSelector,
+      xpath: xpath,
+      tagName: element.tagName.toLowerCase(),
+    };
+  };
+
+  const handleMouseOver = useCallback((event: MouseEvent) => {
+    if (!isElementSelectorActive) return;
+    const target = event.target as HTMLElement;
+
+    if (hoverTimerRef.current) {
+      clearTimeout(hoverTimerRef.current);
+      hoverTimerRef.current = null;
+    }
+
+    if (overlayRef.current && overlayRef.current.contains(target)) {
+      // If mousing over the overlay itself, clear any existing highlight
+      // setHighlightedElementDetails(null); // Optional: clear if moving into overlay
+      return;
+    }
+    if (!target || !target.tagName || target === document.body || target === document.documentElement) {
+      return;
+    }
+
+    hoverTimerRef.current = setTimeout(() => {
+      const info = generateElementInfo(target);
+      setHighlightedElementDetails({ element: target, info });
+    }, 500);
+  }, [isElementSelectorActive]);
+
+  const handleMouseOut = useCallback((event: MouseEvent) => {
+    if (!isElementSelectorActive) return;
+    if (hoverTimerRef.current) {
+      clearTimeout(hoverTimerRef.current);
+      hoverTimerRef.current = null;
+    }
+    // Note: Highlight persists until a new element is highlighted or mode is deactivated
+  }, [isElementSelectorActive]);
+
+  useEffect(() => {
+    if (isElementSelectorActive) {
+      document.addEventListener('mouseover', handleMouseOver);
+      document.addEventListener('mouseout', handleMouseOut);
+      // Add key listener for ESC to deactivate selector mode
+      const handleKeyDown = (event: KeyboardEvent) => {
+        if (event.key === 'Escape') {
+          setIsElementSelectorActive(false);
+          toast({ title: "Element Selector Deactivated", description: "Pressed ESC key."});
+        }
+      };
+      document.addEventListener('keydown', handleKeyDown);
+
+      return () => {
+        document.removeEventListener('mouseover', handleMouseOver);
+        document.removeEventListener('mouseout', handleMouseOut);
+        document.removeEventListener('keydown', handleKeyDown);
+        if (hoverTimerRef.current) {
+          clearTimeout(hoverTimerRef.current);
+        }
+        setHighlightedElementDetails(null); // Clear highlight when selector is deactivated
+      };
+    } else {
+      // Ensure highlight is cleared if mode is turned off externally
+       setHighlightedElementDetails(null);
+    }
+  }, [isElementSelectorActive, handleMouseOver, handleMouseOut, toast]);
+
 
   const handlePlayAll = useCallback(() => {
     if (recordedSteps.length === 0) {
@@ -109,26 +207,21 @@ export function ReflectFlowOverlay() {
     toast({ title: "Playing Selected Steps (Simulated)", description: `Actual playback logic for ${selectedSteps.length} step(s) not yet implemented.` });
   }, [selectedSteps, toast]);
 
-  // Removed handleAddAssertion
-  // const handleAddAssertion = useCallback(() => {
-  //   const newAssertion: Step = {
-  //     id: String(Date.now()) + Math.random().toString(36).substring(2,7),
-  //     type: 'assert',
-  //     description: 'New Assertion (Edit details below)',
-  //     selector: 'body', 
-  //     params: { property: '', expected: '' }
-  //   };
-  //   setRecordedSteps(prev => [...prev, newAssertion]);
-  //   toast({ title: "Assertion Added", description: "A new assertion step has been added. Edit its details in the list." });
-  // }, [toast]);
-
-  const handleToggleElementSelector = useCallback(() => { // Added handler
+  const handleToggleElementSelector = useCallback(() => {
     const newIsActive = !isElementSelectorActive;
     setIsElementSelectorActive(newIsActive);
-    toast({
-      title: newIsActive ? "Element Selector Activated" : "Element Selector Deactivated",
-      description: newIsActive ? "Hover over elements to inspect (mock)." : "Element inspection is off.",
-    });
+    if (newIsActive) {
+      setHighlightedElementDetails(null); // Clear previous selection
+      toast({
+        title: "Element Selector Activated",
+        description: "Hover over elements to inspect. Press ESC to deactivate.",
+      });
+    } else {
+      toast({
+        title: "Element Selector Deactivated",
+        description: "Element inspection is off.",
+      });
+    }
   }, [isElementSelectorActive, toast]);
 
 
@@ -161,11 +254,13 @@ export function ReflectFlowOverlay() {
     toast({ title: "Step Deleted", description: "The step has been removed." });
   }, [toast]);
   
-  const mockElementInfo = useMemo(() => ({
-    id: "submit-button",
-    cssSelector: "button.btn.btn-primary[type='submit']",
-    xpath: "//button[@id='submit-button']"
-  }), []);
+  const popupElementInfo = useMemo(() => {
+    if (highlightedElementDetails?.info) {
+      return highlightedElementDetails.info;
+    }
+    // Provide a default structure if no element is highlighted but popup might be visible
+    return { id: undefined, cssSelector: 'N/A', xpath: 'N/A', tagName: 'N/A' };
+  }, [highlightedElementDetails]);
 
   return (
     <div ref={overlayRef} className="fixed top-0 right-0 h-full p-4 flex flex-col items-end z-[1000] pointer-events-none">
@@ -179,8 +274,8 @@ export function ReflectFlowOverlay() {
                 <CardDescription className="text-xs">Record & Playback UI Interactions</CardDescription>
               </div>
             </div>
-            <Button variant="ghost" size="sm" onClick={() => setIsPopupVisible(prev => !prev)} className="text-xs">
-              {isPopupVisible ? "Hide" : "Show"} Inspector
+            <Button variant="ghost" size="sm" onClick={() => setIsInspectorPanelVisible(prev => !prev)} className="text-xs">
+              {isInspectorPanelVisible ? "Hide" : "Show"} Inspector
             </Button>
           </div>
           <div className="mt-4">
@@ -188,11 +283,10 @@ export function ReflectFlowOverlay() {
               isRecording={isRecording}
               onToggleRecording={handleToggleRecording}
               onPlayAll={handlePlayAll}
-              // onAddAssertion={handleAddAssertion} // Removed
               onSaveSession={handleSaveSession}
               stepCount={recordedSteps.length}
-              isElementSelectorActive={isElementSelectorActive} // Added
-              onToggleElementSelector={handleToggleElementSelector} // Added
+              isElementSelectorActive={isElementSelectorActive}
+              onToggleElementSelector={handleToggleElementSelector}
             />
           </div>
         </CardHeader>
@@ -222,7 +316,12 @@ export function ReflectFlowOverlay() {
           </CardFooter>
         )}
       </Card>
-      <ElementHoverPopup elementInfo={mockElementInfo} isVisible={isPopupVisible && isElementSelectorActive} /> {/* Conditionally show popup */}
+      <ElementHoverPopup 
+        elementInfo={popupElementInfo} 
+        isVisible={isElementSelectorActive && !!highlightedElementDetails && isInspectorPanelVisible} 
+      />
+      <HighlightOverlay targetElement={isElementSelectorActive ? highlightedElementDetails?.element ?? null : null} />
     </div>
   );
 }
+
