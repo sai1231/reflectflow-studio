@@ -83,7 +83,7 @@ export function ReflectFlowOverlay() {
 
     setRecordedSteps(prevSteps => [...prevSteps, newStep]);
     toast({ title: "Action Recorded", description: `Recorded: ${newStep.description}` });
-  }, [toast]); // setRecordedSteps is stable from useState, toast is from hook
+  }, [toast]); 
 
   useEffect(() => {
     if (isRecording) {
@@ -95,7 +95,7 @@ export function ReflectFlowOverlay() {
     return () => {
       document.removeEventListener('click', handleClick, true);
     };
-  }, [isRecording, handleClick]); // handleClick is now a memoized dependency
+  }, [isRecording, handleClick]);
 
   const handlePlayAll = useCallback(() => {
     if (recordedSteps.length === 0) {
@@ -119,7 +119,7 @@ export function ReflectFlowOverlay() {
       type: 'assert',
       description: 'New Assertion (Edit details below)',
       selector: 'body', 
-      params: { property: 'visible', expected: 'true' }
+      params: { property: '', expected: '' } // Initialize params
     };
     setRecordedSteps(prev => [...prev, newAssertion]);
     toast({ title: "Assertion Added", description: "A new assertion step has been added. Edit its details in the list." });
