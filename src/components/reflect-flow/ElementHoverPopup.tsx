@@ -1,21 +1,28 @@
 
 "use client";
 
-import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { 
-  CopyIcon, 
-  ViewIcon, 
-  TypeActionIcon, 
-  ClickIcon, 
-  ScrollIcon, 
+import {
+  CopyIcon,
+  ViewIcon,
+  TypeActionIcon,
+  ClickIcon,
+  ScrollIcon,
   WaitIcon,
-  AssertionIcon,
-  ActionIcon,
-  XIcon // For close button
-} from './icons'; 
+  AssertionIcon, // General assertion category icon
+  ActionIcon,    // General action category icon
+  XIcon,
+  GetAttributeIcon,
+  IsEnabledIcon,
+  IsExistingIcon,
+  GetTextIcon,
+  AddValueIcon,
+  ClearValueIcon,
+  SubMenuArrowIcon // For visual consistency if needed, though DropdownMenu handles it
+} from './icons';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -36,7 +43,7 @@ interface ElementInfo {
 }
 
 interface ElementHoverPopupProps {
-  elementInfo: ElementInfo | null; // Can be null if not inspecting
+  elementInfo: ElementInfo | null;
   isOpen: boolean;
   onCommandSelected: (command: string, targetElementInfo: ElementInfo) => void;
   position: { top: number; left: number } | null;
@@ -67,7 +74,7 @@ export function ElementHoverPopup({ elementInfo, isOpen, onCommandSelected, posi
   };
 
   return (
-    <Card 
+    <Card
       className="fixed w-96 shadow-2xl z-[10002] bg-card/95 backdrop-blur-sm pointer-events-auto"
       style={{
         top: `${position.top}px`,
@@ -91,56 +98,69 @@ export function ElementHoverPopup({ elementInfo, isOpen, onCommandSelected, posi
             {targetTag}{preferredSelector !== targetTag && preferredSelector !== 'N/A' ? ` (${preferredSelector})` : ''}
           </span>
         </div>
-        
-        <div className="flex space-x-2 pt-2">
+
+        <div className="grid grid-cols-1 gap-2 pt-2">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="flex-1">
-                <AssertionIcon className="mr-2 h-4 w-4" /> Add Assertion
+              <Button variant="outline" size="sm" className="w-full justify-start">
+                <ActionIcon className="mr-2 h-4 w-4" /> Add Action
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" sideOffset={5} className="w-56">
-              <DropdownMenuLabel>Assertion Type</DropdownMenuLabel>
+            <DropdownMenuContent align="start" sideOffset={5} className="w-64">
+              <DropdownMenuLabel>Action Type</DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onSelect={() => handleSelect('assertIsVisible')}>
-                <ViewIcon className="mr-2 h-4 w-4" /> Is Visible
+              <DropdownMenuItem onSelect={() => handleSelect('actionClick')}>
+                <ClickIcon className="mr-2 h-4 w-4" /> Click
               </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => handleSelect('assertTextContentEquals')}>
-                <TypeActionIcon className="mr-2 h-4 w-4" /> Text Content Equals...
+              <DropdownMenuItem onSelect={() => handleSelect('actionSetValue')}>
+                <TypeActionIcon className="mr-2 h-4 w-4" /> Set Value (Type Text)
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => handleSelect('actionAddValue')}>
+                <AddValueIcon className="mr-2 h-4 w-4" /> Add Value
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => handleSelect('actionClearValue')}>
+                <ClearValueIcon className="mr-2 h-4 w-4" /> Clear Value
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => handleSelect('actionScrollIntoView')}>
+                <ScrollIcon className="mr-2 h-4 w-4" /> Scroll into View
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="flex-1">
-                <ActionIcon className="mr-2 h-4 w-4" /> Add Action
+              <Button variant="outline" size="sm" className="w-full justify-start">
+                <AssertionIcon className="mr-2 h-4 w-4" /> Add Assertion
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" sideOffset={5} className="w-56">
-              <DropdownMenuLabel>Action Type</DropdownMenuLabel>
+            <DropdownMenuContent align="start" sideOffset={5} className="w-64">
+              <DropdownMenuLabel>Assertion Type</DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onSelect={() => handleSelect('actionClick')}>
-                <ClickIcon className="mr-2 h-4 w-4" /> Click
+              <DropdownMenuItem onSelect={() => handleSelect('assertIsVisible')}>
+                <ViewIcon className="mr-2 h-4 w-4" /> Is Visible
               </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => handleSelect('actionTypeText')}>
-                <TypeActionIcon className="mr-2 h-4 w-4" /> Type Text In...
+              <DropdownMenuItem onSelect={() => handleSelect('assertGetText')}>
+                <GetTextIcon className="mr-2 h-4 w-4" /> Get Text
               </DropdownMenuItem>
-               <DropdownMenuItem onSelect={() => handleSelect('actionScrollIntoView')}>
-                <ScrollIcon className="mr-2 h-4 w-4" /> Scroll into View
+              <DropdownMenuItem onSelect={() => handleSelect('assertGetAttribute')}>
+                <GetAttributeIcon className="mr-2 h-4 w-4" /> Get Attribute
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => handleSelect('assertIsEnabled')}>
+                <IsEnabledIcon className="mr-2 h-4 w-4" /> Is Enabled
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => handleSelect('assertIsExisting')}>
+                <IsExistingIcon className="mr-2 h-4 w-4" /> Is Existing
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-        </div>
-        
-        <div className="pt-2">
+
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="w-full">
+              <Button variant="outline" size="sm" className="w-full justify-start">
                 <WaitIcon className="mr-2 h-4 w-4" /> Add Wait
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" sideOffset={5} className="w-full">
+            <DropdownMenuContent align="start" sideOffset={5} className="w-64">
               <DropdownMenuLabel>Wait Condition</DropdownMenuLabel>
               <DropdownMenuSeparator />
               <DropdownMenuItem onSelect={() => handleSelect('waitForVisible')}>
@@ -148,6 +168,12 @@ export function ElementHoverPopup({ elementInfo, isOpen, onCommandSelected, posi
               </DropdownMenuItem>
               <DropdownMenuItem onSelect={() => handleSelect('waitForClickable')}>
                 <ClickIcon className="mr-2 h-4 w-4" /> Wait For Clickable
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => handleSelect('waitForEnabled')}>
+                <IsEnabledIcon className="mr-2 h-4 w-4" /> Wait For Enabled
+              </DropdownMenuItem>
+               <DropdownMenuItem onSelect={() => handleSelect('waitForExist')}>
+                <IsExistingIcon className="mr-2 h-4 w-4" /> Wait For Exist
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
