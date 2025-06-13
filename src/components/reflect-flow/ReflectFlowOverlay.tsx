@@ -74,7 +74,6 @@ export function ReflectFlowOverlay() {
   const [highlightedElementDetails, setHighlightedElementDetails] = useState<ElementDetails | null>(null);
   const [inspectIconTarget, setInspectIconTarget] = useState<HTMLElement | null>(null);
   
-  // State for the new multi-level context menu (formerly ElementHoverPopup)
   const [isElementContextMenuOpen, setIsElementContextMenuOpen] = useState(false);
   const [contextMenuPosition, setContextMenuPosition] = useState<{ top: number; left: number } | null>(null);
   const [currentContextMenuElementInfo, setCurrentContextMenuElementInfo] = useState<ElementInfoForPopup | null>(null);
@@ -87,7 +86,7 @@ export function ReflectFlowOverlay() {
     const newIsRecording = !isRecording;
     setIsRecording(newIsRecording);
     if (newIsRecording) {
-      setIsElementSelectorActive(false);
+      setIsElementSelectorActive(false); // Ensure selector is off when recording
       setIsElementContextMenuOpen(false);
       setInspectIconTarget(null);
       setHighlightedElementDetails(null);
@@ -194,20 +193,19 @@ export function ReflectFlowOverlay() {
 
     setCurrentContextMenuElementInfo(elementInfoForMenu);
 
-    // Position the menu near the click event (icon's position)
     const iconRect = (event.currentTarget as HTMLElement).getBoundingClientRect();
     setContextMenuPosition({ top: iconRect.bottom + 5, left: iconRect.left });
     
     setIsElementContextMenuOpen(true);
-    setInspectIconTarget(null); // Hide icon once menu is open
-    setHighlightedElementDetails(null); // Hide highlight once menu is open
+    setInspectIconTarget(null); 
+    setHighlightedElementDetails(null); 
   }, [highlightedElementDetails]);
 
   const closeElementContextMenu = useCallback(() => {
     setIsElementContextMenuOpen(false);
     setCurrentContextMenuElementInfo(null);
-    setHighlightedElementDetails(null); // Clear highlight when menu closes
-    setInspectIconTarget(null); // Clear icon when menu closes
+    setHighlightedElementDetails(null); 
+    setInspectIconTarget(null); 
   }, []);
 
   useEffect(() => {
@@ -224,7 +222,7 @@ export function ReflectFlowOverlay() {
 
     if (isElementSelectorActive) {
       document.addEventListener('keydown', handleKeyDown);
-      if (!isElementContextMenuOpen) { // Only attach hover listeners if menu is not open
+      if (!isElementContextMenuOpen) { 
         document.addEventListener('mouseover', handleMouseOver);
         document.addEventListener('mouseout', handleMouseOut);
       } else {
@@ -240,7 +238,7 @@ export function ReflectFlowOverlay() {
 
       setHighlightedElementDetails(null);
       setInspectIconTarget(null);
-      setIsElementContextMenuOpen(false); // Ensure menu is closed when selector is off
+      setIsElementContextMenuOpen(false); 
       setCurrentContextMenuElementInfo(null);
     }
 
@@ -252,14 +250,6 @@ export function ReflectFlowOverlay() {
     };
   }, [isElementSelectorActive, isElementContextMenuOpen, handleMouseOver, handleMouseOut, toast, closeElementContextMenu]);
 
-
-  const handlePlayAll = useCallback(() => {
-    if (recordedSteps.length === 0) {
-      toast({ title: "No steps to play", description: "Record some steps first.", variant: "destructive" });
-      return;
-    }
-    toast({ title: "Playing All Steps (Simulated)", description: "Actual playback logic not yet implemented." });
-  }, [recordedSteps, toast]);
 
   const handlePlaySelected = useCallback(() => {
     if (selectedSteps.length === 0) {
@@ -273,15 +263,19 @@ export function ReflectFlowOverlay() {
     const newIsActive = !isElementSelectorActive;
     setIsElementSelectorActive(newIsActive);
     if (newIsActive) {
-      setIsRecording(false); // Pause recording if selector is active
+      setIsRecording(false); 
       setHighlightedElementDetails(null);
       setInspectIconTarget(null);
-      setIsElementContextMenuOpen(false); // Ensure menu is closed when selector activates
+      setIsElementContextMenuOpen(false); 
       toast({
         title: "Element Selector Activated",
         description: "Hover over elements. Click target icon to open actions. Press ESC to deactivate.",
       });
     } else {
+      setHighlightedElementDetails(null);
+      setInspectIconTarget(null);
+      setIsElementContextMenuOpen(false);
+      setCurrentContextMenuElementInfo(null);
       toast({
         title: "Element Selector Deactivated",
         description: "Element inspection is off.",
@@ -295,13 +289,6 @@ export function ReflectFlowOverlay() {
     let newStep: Step | null = null;
     let toastMessage = "";
     const baseId = String(Date.now()) + Math.random().toString(36).substring(2,7);
-
-    // Normalize command by removing "action", "assert", or "waitFor" prefix if present
-    const actionType = command.startsWith('action') ? command.substring('action'.length) :
-                       command.startsWith('assert') ? command.substring('assert'.length) :
-                       command.startsWith('waitFor') ? command.substring('waitFor'.length) : command;
-    const actionTypeLower = actionType.charAt(0).toLowerCase() + actionType.slice(1);
-
 
     switch (command) {
       // Actions
@@ -395,7 +382,7 @@ export function ReflectFlowOverlay() {
       setRecordedSteps(prev => [...prev, newStep]);
       toast({ title: "Step Added", description: toastMessage });
     }
-    closeElementContextMenu(); // Close context menu after command selection
+    closeElementContextMenu(); 
   }, [toast, closeElementContextMenu]);
 
 
@@ -437,7 +424,7 @@ export function ReflectFlowOverlay() {
             <div className="flex items-center space-x-2">
               <FileIcon className="h-6 w-6 text-primary" />
               <div>
-                <CardTitle className="text-xl font-headline">ReflectFlow</CardTitle>
+                <CardTitle className="text-xl font-headline">ReflectFlow Panel</CardTitle>
                 <CardDescription className="text-xs">Record & Playback UI Interactions</CardDescription>
               </div>
             </div>
@@ -446,7 +433,6 @@ export function ReflectFlowOverlay() {
             <HeaderControls
               isRecording={isRecording}
               onToggleRecording={handleToggleRecording}
-              onPlayAll={handlePlayAll}
               onSaveSession={handleSaveSession}
               stepCount={recordedSteps.length}
               isElementSelectorActive={isElementSelectorActive}
@@ -481,20 +467,18 @@ export function ReflectFlowOverlay() {
         )}
       </Card>
 
-      {/* Clickable Target Icon */}
       {isElementSelectorActive && inspectIconTarget && !isElementContextMenuOpen && (() => {
           const rect = inspectIconTarget.getBoundingClientRect();
           const iconSize = 32; 
           let iconTop = rect.top + rect.height / 2 - iconSize / 2;
           let iconLeft = rect.left + rect.width / 2 - iconSize / 2;
 
-          // Clamp position to be within viewport (with some padding)
           iconTop = Math.max(8, Math.min(iconTop, window.innerHeight - iconSize - 8));
           iconLeft = Math.max(8, Math.min(iconLeft, window.innerWidth - iconSize - 8));
           
           return (
               <Button
-                  data-reflectflow-icon="true" // Prevents icon from being inspected
+                  data-reflectflow-icon="true" 
                   variant="outline"
                   size="icon"
                   className="fixed h-8 w-8 bg-background shadow-lg rounded-full p-0 z-[10001] pointer-events-auto"
@@ -510,7 +494,6 @@ export function ReflectFlowOverlay() {
           );
       })()}
 
-      {/* Multi-level Dropdown Menu (formerly ElementHoverPopup) */}
       <ElementHoverPopup
         elementInfo={currentContextMenuElementInfo}
         isOpen={isElementContextMenuOpen && !!currentContextMenuElementInfo}
@@ -523,4 +506,3 @@ export function ReflectFlowOverlay() {
     </div>
   );
 }
-
