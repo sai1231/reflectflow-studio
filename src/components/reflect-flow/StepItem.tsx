@@ -55,6 +55,7 @@ export function StepItem({ step, isSelected, onSelect, onUpdateStep, onDeleteSte
   const [editableStep, setEditableStep] = useState<Step>(() => JSON.parse(JSON.stringify(step)));
 
   useEffect(() => {
+    // Update editableStep if the step prop changes and we are not in editing mode
     if (!isEditing) {
       setEditableStep(JSON.parse(JSON.stringify(step)));
     }
@@ -120,13 +121,10 @@ export function StepItem({ step, isSelected, onSelect, onUpdateStep, onDeleteSte
 
   const toggleEditMode = () => {
     if (isEditing) {
-      // If currently editing, "Cancel Edit" means discarding changes and exiting edit mode.
-      // For a true cancel, we should revert editableStep to the original 'step' prop.
-      setEditableStep(JSON.parse(JSON.stringify(step))); // Revert to original
+      setEditableStep(JSON.parse(JSON.stringify(step))); 
       setIsEditing(false);
     } else {
-      // Entering edit mode
-      setEditableStep(JSON.parse(JSON.stringify(step))); // Ensure fresh copy
+      setEditableStep(JSON.parse(JSON.stringify(step))); 
       setIsEditing(true);
     }
   };
@@ -136,7 +134,7 @@ export function StepItem({ step, isSelected, onSelect, onUpdateStep, onDeleteSte
   };
 
   const renderStepDetails = () => {
-    const currentDisplayStep = editableStep; // Use editableStep for display consistency
+    const currentDisplayStep = editableStep; 
     const primarySelector = currentDisplayStep.selector || (currentDisplayStep.selectors && currentDisplayStep.selectors[0]) || 'N/A';
     switch (currentDisplayStep.type) {
       case 'navigate':
@@ -329,7 +327,10 @@ export function StepItem({ step, isSelected, onSelect, onUpdateStep, onDeleteSte
                   <MoreOptionsIcon className="h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
+              <DropdownMenuContent 
+                align="end"
+                onCloseAutoFocus={(e) => e.preventDefault()}
+              >
                 <DropdownMenuItem onSelect={toggleEditMode}>
                   <EditIcon className="mr-2 h-4 w-4" />
                   {isEditing ? 'Cancel Edit' : 'Edit Step'} 
@@ -348,5 +349,6 @@ export function StepItem({ step, isSelected, onSelect, onUpdateStep, onDeleteSte
     </TooltipProvider>
   );
 }
+    
 
     
