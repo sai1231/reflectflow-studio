@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import type { Step } from '@/types';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -9,42 +9,86 @@ import { HeaderControls } from './HeaderControls';
 import { StepList } from './StepList';
 import { ElementHoverPopup } from './ElementHoverPopup';
 import { useToast } from '@/hooks/use-toast';
-import { PlayIcon, CheckboxSquareIcon, CheckboxUncheckedIcon, FileIcon } from './icons'; // Updated imports
-
-// Mock initial steps for demonstration
-const MOCK_STEPS: Step[] = [
-  { id: '1', type: 'navigate', value: 'https://example.com/login', description: 'Navigate to Login Page' },
-  { id: '2', type: 'type', selector: '#username', value: 'testUser', description: 'Type username' },
-  { id: '3', type: 'type', selector: '#password', value: 'password123', description: 'Type password' },
-  { id: '4', type: 'click', selector: 'button[type="submit"]', description: 'Click Login Button' },
-  { id: '5', type: 'assert', selector: '.welcome-message', params: {property: 'textContent', expected: 'Welcome testUser'}, description: 'Verify Welcome Message' },
-  { id: '6', type: 'scroll', selector: 'window', value: '0, 500', description: 'Scroll window down'},
-];
-
+import { PlayIcon, CheckboxSquareIcon, CheckboxUncheckedIcon, FileIcon } from './icons';
 
 export function ReflectFlowOverlay() {
   const [isRecording, setIsRecording] = useState(false);
-  const [recordedSteps, setRecordedSteps] = useState<Step[]>(MOCK_STEPS); // Start with mock data
+  const [recordedSteps, setRecordedSteps] = useState<Step[]>([]); // Start with empty steps
   const [selectedSteps, setSelectedSteps] = useState<string[]>([]);
-  const [isPopupVisible, setIsPopupVisible] = useState(false); // For ElementHoverPopup
+  const [isPopupVisible, setIsPopupVisible] = useState(false);
+  const overlayRef = useRef<HTMLDivElement>(null); // Ref for the overlay container
 
   const { toast } = useToast();
 
   const handleToggleRecording = useCallback(() => {
-    setIsRecording(prev => !prev);
-    toast({
-      title: isRecording ? "Recording Paused" : "Recording Started",
-      description: isRecording ? "Interaction recording is now paused." : "Capturing user interactions.",
-    });
+    const newIsRecording = !isRecording;
+    setIsRecording(newIsRecording);
+    if (newIsRecording) {
+      toast({
+        title: "Recording Started",
+        description: "Capturing click interactions. Click on elements on the page.",
+      });
+    } else {
+      toast({
+        title: "Recording Paused",
+        description: "Interaction recording is now paused.",
+      });
+    }
   }, [isRecording, toast]);
+
+  // Effect for handling global click listener
+  useEffect(() => {
+    const handleClick = (event: MouseEvent) => {
+      // Intentionally not checking isRecording here, as the listener is only added when isRecording is true
+      
+      if (overlayRef.current && overlayRef.current.contains(event.target as Node)) {
+        // Click was inside the ReflectFlow overlay, ignore
+        return;
+      }
+
+      const target = event.target as HTMLElement;
+      
+      // Prevent clicks on scrollbars or non-element targets
+      if (!target || !target.tagName) return;
+
+      let simpleSelector = target.tagName.toLowerCase();
+      if (target.id) {
+        simpleSelector = `#${target.id}`;
+      } else if (target.classList && target.classList.length > 0 && typeof target.classList.item(0) === 'string') {
+         // Fallback to tagName.className if no ID (using first class)
+        simpleSelector = `${target.tagName.toLowerCase()}.${target.classList.item(0)}`;
+      }
+      
+      const description = `Click on ${target.tagName.toLowerCase()}${target.id ? ` (#${target.id})` : ''}${target.classList && target.classList.length > 0 && typeof target.classList.item(0) === 'string' ? ` (.${target.classList.item(0)})` : ''}`;
+
+      const newStep: Step = {
+        id: String(Date.now()),
+        type: 'click',
+        selector: simpleSelector,
+        description: description,
+      };
+
+      setRecordedSteps(prevSteps => [...prevSteps, newStep]);
+      toast({ title: "Action Recorded", description: newStep.description });
+    };
+
+    if (isRecording) {
+      document.addEventListener('click', handleClick, true); // Use capture phase to get clicks first
+    } else {
+      document.removeEventListener('click', handleClick, true);
+    }
+
+    return () => {
+      document.removeEventListener('click', handleClick, true);
+    };
+  }, [isRecording, toast, setRecordedSteps]); // setRecordedSteps is stable, but good to include
 
   const handlePlayAll = useCallback(() => {
     if (recordedSteps.length === 0) {
       toast({ title: "No steps to play", description: "Record some steps first.", variant: "destructive" });
       return;
     }
-    toast({ title: "Playing All Steps", description: "Simulating playback of all recorded steps..." });
-    // Actual playback logic would go here
+    toast({ title: "Playing All Steps (Simulated)", description: "Actual playback logic not yet implemented." });
   }, [recordedSteps, toast]);
 
   const handlePlaySelected = useCallback(() => {
@@ -52,25 +96,23 @@ export function ReflectFlowOverlay() {
       toast({ title: "No steps selected", description: "Please select steps to play.", variant: "destructive" });
       return;
     }
-    toast({ title: "Playing Selected Steps", description: `Simulating playback of ${selectedSteps.length} selected step(s)...` });
-    // Actual playback logic for selected steps would go here
+    toast({ title: "Playing Selected Steps (Simulated)", description: `Actual playback logic for ${selectedSteps.length} step(s) not yet implemented.` });
   }, [selectedSteps, toast]);
 
   const handleAddAssertion = useCallback(() => {
     const newAssertion: Step = {
       id: String(Date.now()),
       type: 'assert',
-      description: 'New Assertion',
-      selector: 'body', // Default selector
+      description: 'New Assertion (Edit details below)',
+      selector: 'body', 
       params: { property: 'visible', expected: 'true' }
     };
     setRecordedSteps(prev => [...prev, newAssertion]);
-    toast({ title: "Assertion Added", description: "A new assertion step has been added to the list." });
+    toast({ title: "Assertion Added", description: "A new assertion step has been added. Edit its details in the list." });
   }, [toast]);
 
   const handleSaveSession = useCallback(() => {
-    toast({ title: "Session Saved (Simulated)", description: "Your current recording session has been 'saved' locally." });
-    // Actual local storage saving logic would go here
+    toast({ title: "Session Saved (Simulated)", description: "Actual saving logic not yet implemented." });
   }, [toast]);
 
   const handleSelectStep = useCallback((id: string, selected: boolean) => {
@@ -80,10 +122,10 @@ export function ReflectFlowOverlay() {
   }, []);
   
   const handleSelectAllSteps = useCallback(() => {
-    if (selectedSteps.length === recordedSteps.length) {
-      setSelectedSteps([]); // Deselect all
+    if (selectedSteps.length === recordedSteps.length && recordedSteps.length > 0) {
+      setSelectedSteps([]);
     } else {
-      setSelectedSteps(recordedSteps.map(step => step.id)); // Select all
+      setSelectedSteps(recordedSteps.map(step => step.id));
     }
   }, [recordedSteps, selectedSteps]);
 
@@ -94,8 +136,8 @@ export function ReflectFlowOverlay() {
 
   const handleDeleteStep = useCallback((id: string) => {
     setRecordedSteps(prev => prev.filter(s => s.id !== id));
-    setSelectedSteps(prev => prev.filter(stepId => stepId !== id)); // also remove from selected
-    toast({ title: "Step Deleted", description: "The step has been removed from the list." });
+    setSelectedSteps(prev => prev.filter(stepId => stepId !== id));
+    toast({ title: "Step Deleted", description: "The step has been removed." });
   }, [toast]);
   
   const mockElementInfo = useMemo(() => ({
@@ -105,8 +147,8 @@ export function ReflectFlowOverlay() {
   }), []);
 
   return (
-    <div className="fixed top-0 right-0 h-full p-4 flex flex-col items-end z-[1000] pointer-events-none">
-      <Card className="w-[400px] h-full flex flex-col shadow-2xl pointer-events-auto overflow-hidden">
+    <div ref={overlayRef} className="fixed top-0 right-0 h-full p-4 flex flex-col items-end z-[1000] pointer-events-none">
+      <Card className="w-[400px] h-full flex flex-col shadow-2xl pointer-events-auto overflow-hidden bg-card/90 backdrop-blur-sm">
         <CardHeader className="p-4 border-b">
           <div className="flex justify-between items-center">
             <div className="flex items-center space-x-2">
@@ -116,7 +158,7 @@ export function ReflectFlowOverlay() {
                 <CardDescription className="text-xs">Record & Playback UI Interactions</CardDescription>
               </div>
             </div>
-            <Button variant="ghost" size="sm" onClick={() => setIsPopupVisible(prev => !prev)}>
+            <Button variant="ghost" size="sm" onClick={() => setIsPopupVisible(prev => !prev)} className="text-xs">
               {isPopupVisible ? "Hide" : "Show"} Inspector
             </Button>
           </div>
@@ -132,7 +174,6 @@ export function ReflectFlowOverlay() {
           </div>
         </CardHeader>
         <CardContent className="flex-grow p-0 overflow-hidden relative">
-          {/* Add a wrapper for StepList to manage its height if CardContent is used for padding */}
           <div className="h-full"> 
             <StepList
               steps={recordedSteps}
@@ -147,15 +188,14 @@ export function ReflectFlowOverlay() {
           <CardFooter className="p-3 border-t flex-col items-start space-y-2">
             <div className="flex justify-between w-full items-center">
               <Button onClick={handleSelectAllSteps} variant="ghost" size="sm" className="text-xs">
-                {selectedSteps.length === recordedSteps.length && recordedSteps.length > 0 ? <CheckboxSquareIcon className="mr-2 h-4 w-4" /> : <CheckboxUncheckedIcon className="mr-2 h-4 w-4" />}
-                {selectedSteps.length === recordedSteps.length && recordedSteps.length > 0 ? 'Deselect All' : 'Select All'} ({selectedSteps.length}/{recordedSteps.length})
+                {selectedSteps.length === recordedSteps.length ? <CheckboxSquareIcon className="mr-2 h-4 w-4" /> : <CheckboxUncheckedIcon className="mr-2 h-4 w-4" />}
+                {selectedSteps.length === recordedSteps.length ? 'Deselect All' : 'Select All'} ({selectedSteps.length}/{recordedSteps.length})
               </Button>
-              <Button onClick={handlePlaySelected} variant="accent" size="sm" disabled={selectedSteps.length === 0 || isRecording}>
+              <Button onClick={handlePlaySelected} variant="default" size="sm" disabled={selectedSteps.length === 0 || isRecording} className="bg-accent hover:bg-accent/90 text-accent-foreground">
                 <PlayIcon className="mr-2 h-4 w-4" />
                 Play Selected ({selectedSteps.length})
               </Button>
             </div>
-           
           </CardFooter>
         )}
       </Card>
