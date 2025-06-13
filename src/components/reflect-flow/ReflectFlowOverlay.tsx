@@ -13,10 +13,10 @@ import { PlayIcon, CheckboxSquareIcon, CheckboxUncheckedIcon, FileIcon } from '.
 
 export function ReflectFlowOverlay() {
   const [isRecording, setIsRecording] = useState(false);
-  const [recordedSteps, setRecordedSteps] = useState<Step[]>([]); // Start with empty steps
+  const [recordedSteps, setRecordedSteps] = useState<Step[]>([]);
   const [selectedSteps, setSelectedSteps] = useState<string[]>([]);
   const [isPopupVisible, setIsPopupVisible] = useState(false);
-  const overlayRef = useRef<HTMLDivElement>(null); // Ref for the overlay container
+  const overlayRef = useRef<HTMLDivElement>(null);
 
   const { toast } = useToast();
 
@@ -36,56 +36,66 @@ export function ReflectFlowOverlay() {
     }
   }, [isRecording, toast]);
 
-  // Effect for handling global click listener
-  useEffect(() => {
-    const handleClick = (event: MouseEvent) => {
-      // If the click originated from within the ReflectFlow overlay, ignore it.
-      if (overlayRef.current && overlayRef.current.contains(event.target as Node)) {
-        return;
-      }
+  const handleClick = useCallback((event: MouseEvent) => {
+    if (overlayRef.current && overlayRef.current.contains(event.target as Node)) {
+      // Click is inside the ReflectFlow overlay UI, ignore it.
+      return;
+    }
 
-      const target = event.target as HTMLElement;
-      
-      // Ignore clicks on non-element targets (e.g., scrollbars, document itself if no specific element is hit)
-      if (!target || !target.tagName) {
-        return;
-      }
-      
-      let simpleSelector = target.tagName.toLowerCase();
-      if (target.id) {
-        simpleSelector = `#${target.id}`;
+    const target = event.target as HTMLElement;
+
+    // Ignore clicks on non-element targets, or too-generic elements like body/html
+    if (!target || !target.tagName || target === document.body || target === document.documentElement) {
+      return;
+    }
+    
+    let selector = target.tagName.toLowerCase();
+    let descriptionDetailText = target.tagName.toLowerCase();
+
+    if (target.id) {
+      selector = `#${target.id}`;
+      descriptionDetailText = selector;
+    } else {
+      // Try to find a more "significant" class, avoiding common layout/utility classes
+      const significantClass = Array.from(target.classList).find(
+        c => c.trim() !== '' && !/^(bg-|text-|border-|p-|m-|flex|grid|item|justify|self-|gap-|rounded|shadow-|w-|h-)/.test(c)
+      );
+      if (significantClass) {
+        selector = `${target.tagName.toLowerCase()}.${CSS.escape(significantClass)}`;
+        descriptionDetailText = `.${CSS.escape(significantClass)}`;
       } else if (target.classList && target.classList.length > 0) {
-        // Use the first class name if available and not empty
-        const firstClass = target.classList.item(0);
+        const firstClass = Array.from(target.classList).find(c => c.trim() !== '');
         if (firstClass) {
-          simpleSelector = `${target.tagName.toLowerCase()}.${CSS.escape(firstClass)}`;
+          selector = `${target.tagName.toLowerCase()}.${CSS.escape(firstClass)}`;
+          descriptionDetailText = `.${CSS.escape(firstClass)}`;
         }
       }
-      
-      const description = `Click on ${target.tagName.toLowerCase()}${target.id ? ` (#${target.id})` : ''}${target.classList && target.classList.length > 0 && target.classList.item(0) ? ` (.${target.classList.item(0)})` : ''}`;
+    }
+    
+    const description = `Click on ${target.tagName.toLowerCase()}${descriptionDetailText !== target.tagName.toLowerCase() ? ` (${descriptionDetailText})` : ''}`;
 
-      const newStep: Step = {
-        id: String(Date.now()) + Math.random().toString(36).substring(2,7), // Add random part for better uniqueness
-        type: 'click',
-        selector: simpleSelector,
-        description: description,
-      };
-
-      setRecordedSteps(prevSteps => [...prevSteps, newStep]);
-      toast({ title: "Action Recorded", description: `Recorded: ${newStep.description}` });
+    const newStep: Step = {
+      id: String(Date.now()) + Math.random().toString(36).substring(2,7),
+      type: 'click',
+      selector: selector,
+      description: description,
     };
 
+    setRecordedSteps(prevSteps => [...prevSteps, newStep]);
+    toast({ title: "Action Recorded", description: `Recorded: ${newStep.description}` });
+  }, [toast]); // setRecordedSteps is stable from useState, toast is from hook
+
+  useEffect(() => {
     if (isRecording) {
       document.addEventListener('click', handleClick, true); // Use capture phase
     } else {
       document.removeEventListener('click', handleClick, true);
     }
 
-    // Cleanup function to remove the event listener
     return () => {
       document.removeEventListener('click', handleClick, true);
     };
-  }, [isRecording, toast]); // Dependencies: re-run if isRecording or toast changes
+  }, [isRecording, handleClick]); // handleClick is now a memoized dependency
 
   const handlePlayAll = useCallback(() => {
     if (recordedSteps.length === 0) {
@@ -207,4 +217,3 @@ export function ReflectFlowOverlay() {
     </div>
   );
 }
-
