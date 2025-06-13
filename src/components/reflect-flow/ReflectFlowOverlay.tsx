@@ -24,15 +24,58 @@ interface ElementInfoForPopup {
   tagName?: string;
 }
 
+// Helper function, can be outside the component or memoized if complex
+const generateElementInfo = (element: HTMLElement): ElementInfoForPopup => {
+  let id = element.id ? `#${CSS.escape(element.id)}` : undefined;
+  let cssSelector = `${element.tagName.toLowerCase()}`;
+  if (element.classList.length > 0) {
+    const significantClasses = Array.from(element.classList)
+      .filter(c => c.trim() !== '' && !/^(bg-|text-|border-|p-|m-|flex|grid|item|justify|self-|gap-|rounded|shadow-|w-|h-)/.test(c))
+      .map(c => CSS.escape(c));
+    if (significantClasses.length > 0) {
+      cssSelector += `.${significantClasses.join('.')}`;
+    } else {
+      // Fallback to first class if no "significant" ones found
+      const firstClass = Array.from(element.classList).find(c => c.trim() !== '');
+      if (firstClass) {
+        cssSelector += `.${CSS.escape(firstClass)}`;
+      }
+    }
+  }
+  
+  let xpath = `//${element.tagName.toLowerCase()}`;
+  if (element.id) {
+    xpath += `[@id='${CSS.escape(element.id)}']`;
+  } else if (element.classList.length > 0) {
+      const significantClass = Array.from(element.classList).find(c => !c.startsWith('bg-') && !c.startsWith('text-') && !c.startsWith('p-') && !c.startsWith('m-') && c.trim() !== '');
+      if (significantClass) {
+          xpath += `[contains(@class, '${CSS.escape(significantClass)}')]`;
+      }
+  }
+  if (['button', 'a', 'span', 'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'div'].includes(element.tagName.toLowerCase()) && element.textContent && element.textContent.trim().length > 0 && element.textContent.trim().length < 50 && !element.children.length) {
+      xpath += `[normalize-space()="${element.textContent.trim().replace(/"/g, "'")}"]`;
+  } else if (element.getAttribute('aria-label')) {
+    xpath += `[@aria-label="${element.getAttribute('aria-label')?.replace(/"/g, "'")}"]`;
+  }
+
+
+  return {
+    id: element.id || undefined,
+    cssSelector: id || cssSelector, // Prefer ID if available for cssSelector field too
+    xpath: xpath,
+    tagName: element.tagName.toLowerCase(),
+  };
+};
+
+
 export function ReflectFlowOverlay() {
   const [isRecording, setIsRecording] = useState(false);
   const [recordedSteps, setRecordedSteps] = useState<Step[]>([]);
   const [selectedSteps, setSelectedSteps] = useState<string[]>([]);
-  // const [isInspectorPanelVisible, setIsInspectorPanelVisible] = useState(true); // No longer directly controls element popup visibility
   const [isElementSelectorActive, setIsElementSelectorActive] = useState(false);
   
   const [highlightedElementDetails, setHighlightedElementDetails] = useState<ElementDetails | null>(null);
-  const [inspectIconTarget, setInspectIconTarget] = useState<HTMLElement | null>(null);
+  const [inspectIconTarget, setInspectIconTarget] = useState<HTMLElement | null>(null); // This is the page element for which the icon is shown
   const [isElementContextPopupOpen, setIsElementContextPopupOpen] = useState(false);
   const [popupAnchorPosition, setPopupAnchorPosition] = useState<{ top: number; left: number } | null>(null);
   const [currentPopupElementInfo, setCurrentPopupElementInfo] = useState<ElementInfoForPopup | null>(null);
@@ -73,29 +116,10 @@ export function ReflectFlowOverlay() {
       return;
     }
     
-    let selector = target.tagName.toLowerCase();
-    let descriptionDetailText = target.tagName.toLowerCase();
+    const elementInfo = generateElementInfo(target);
+    const selector = elementInfo.id ? `#${CSS.escape(elementInfo.id)}` : elementInfo.cssSelector || 'N/A';
+    const description = `Click on ${elementInfo.tagName}${selector !== elementInfo.tagName ? ` (${selector})` : ''}`;
 
-    if (target.id) {
-      selector = `#${CSS.escape(target.id)}`;
-      descriptionDetailText = selector;
-    } else {
-      const significantClass = Array.from(target.classList).find(
-        c => c.trim() !== '' && !/^(bg-|text-|border-|p-|m-|flex|grid|item|justify|self-|gap-|rounded|shadow-|w-|h-)/.test(c)
-      );
-      if (significantClass) {
-        selector = `${target.tagName.toLowerCase()}.${CSS.escape(significantClass)}`;
-        descriptionDetailText = `.${CSS.escape(significantClass)}`;
-      } else if (target.classList && target.classList.length > 0) {
-        const firstClass = Array.from(target.classList).find(c => c.trim() !== '');
-        if (firstClass) {
-          selector = `${target.tagName.toLowerCase()}.${CSS.escape(firstClass)}`;
-          descriptionDetailText = `.${CSS.escape(firstClass)}`;
-        }
-      }
-    }
-    
-    const description = `Click on ${target.tagName.toLowerCase()}${descriptionDetailText !== target.tagName.toLowerCase() ? ` (${descriptionDetailText})` : ''}`;
 
     const newStep: Step = {
       id: String(Date.now()) + Math.random().toString(36).substring(2,7),
@@ -120,64 +144,35 @@ export function ReflectFlowOverlay() {
   }, [isRecording, handleClick, isElementSelectorActive, isElementContextPopupOpen]);
 
 
-  const generateElementInfo = (element: HTMLElement): ElementInfoForPopup => {
-    let id = element.id ? `#${CSS.escape(element.id)}` : undefined;
-    let cssSelector = `${element.tagName.toLowerCase()}`;
-    if (element.classList.length > 0) {
-      const classes = Array.from(element.classList).filter(c => c.trim() !== '').map(c => CSS.escape(c)).join('.');
-      if (classes) cssSelector += `.${classes}`;
-    }
-    
-    let xpath = `//${element.tagName.toLowerCase()}`;
-    if (element.id) {
-      xpath += `[@id='${CSS.escape(element.id)}']`;
-    } else if (element.classList.length > 0) {
-        const significantClass = Array.from(element.classList).find(c => !c.startsWith('bg-') && !c.startsWith('text-') && !c.startsWith('p-') && !c.startsWith('m-') && c.trim() !== '');
-        if (significantClass) {
-            xpath += `[contains(@class, '${CSS.escape(significantClass)}')]`;
-        }
-    }
-    if (['button', 'a', 'span', 'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'].includes(element.tagName.toLowerCase()) && element.textContent && element.textContent.trim().length < 50 && !element.children.length) {
-        xpath += `[normalize-space()="${element.textContent.trim().replace(/"/g, "'")}"]`;
-    }
-
-    return {
-      id: element.id || undefined,
-      cssSelector: id || cssSelector,
-      xpath: xpath,
-      tagName: element.tagName.toLowerCase(),
-    };
-  };
-
   const handleMouseOver = useCallback((event: MouseEvent) => {
-    // This function should only set up the timer for showing the icon.
-    // It should not run if a popup is already open.
     if (!isElementSelectorActive || isElementContextPopupOpen) return;
     
     const target = event.target as HTMLElement;
 
-    if (hoverTimerRef.current) {
-      clearTimeout(hoverTimerRef.current);
-      hoverTimerRef.current = null;
+    if (target.matches('[data-reflectflow-icon="true"]')) {
+      if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
+      return;
     }
 
     if (overlayRef.current && overlayRef.current.contains(target)) {
-        setInspectIconTarget(null); // Clear icon if hovering over overlay
+        setInspectIconTarget(null);
         setHighlightedElementDetails(null);
+        if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
         return;
     }
     if (!target || !target.tagName || target === document.body || target === document.documentElement) {
-        setInspectIconTarget(null); // Clear icon if on body/html
+        setInspectIconTarget(null);
         setHighlightedElementDetails(null);
+        if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
         return;
     }
     
-    // Clear previous icon target immediately to avoid flickering if mouse moves fast
-    setInspectIconTarget(null);
-    setHighlightedElementDetails({ element: target, info: generateElementInfo(target) }); // Set highlight immediately
+    if (hoverTimerRef.current) {
+      clearTimeout(hoverTimerRef.current);
+    }
 
     hoverTimerRef.current = setTimeout(() => {
-      // After delay, confirm the target for the icon
+      setHighlightedElementDetails({ element: target, info: generateElementInfo(target) });
       setInspectIconTarget(target);
     }, 500);
   }, [isElementSelectorActive, isElementContextPopupOpen]);
@@ -189,52 +184,59 @@ export function ReflectFlowOverlay() {
       clearTimeout(hoverTimerRef.current);
       hoverTimerRef.current = null;
     }
-    // Don't clear inspectIconTarget or highlightedElementDetails here immediately
-    // to allow user to move mouse to the icon.
-    // Icon will be cleared if another element is hovered or selector mode changes.
+    // Do not clear highlight/icon here; they persist until next valid hover, mode change, or popup interaction.
   }, [isElementSelectorActive, isElementContextPopupOpen]);
 
 
-  const handleInspectIconClick = useCallback((event: React.MouseEvent, element: HTMLElement) => {
-    event.stopPropagation();
-    if (!highlightedElementDetails || highlightedElementDetails.element !== element) {
-      // This case should ideally not happen if icon is tied to highlightedElementDetails
-      const info = generateElementInfo(element);
-      setHighlightedElementDetails({element, info});
-      setCurrentPopupElementInfo(info);
-    } else {
-      setCurrentPopupElementInfo(highlightedElementDetails.info);
-    }
+  const handleInspectIconClick = useCallback((event: React.MouseEvent, pageElement: HTMLElement) => {
+    event.stopPropagation(); // Prevent click from bubbling further
+    
+    const elementInfoForPopup = highlightedElementDetails && highlightedElementDetails.element === pageElement 
+      ? highlightedElementDetails.info 
+      : generateElementInfo(pageElement);
 
+    setCurrentPopupElementInfo(elementInfoForPopup);
+    
     const iconRect = (event.currentTarget as HTMLElement).getBoundingClientRect();
     const popupWidth = 384; // approx width of ElementHoverPopup (w-96)
-    let left = iconRect.left + iconRect.width / 2 - popupWidth / 2;
-    let top = iconRect.bottom + 10;
+    const popupHeight = 350; // approx height of popup
 
-    // Adjust if popup goes off-screen
+    let left = iconRect.left + iconRect.width / 2 - popupWidth / 2;
+    let top = iconRect.bottom + 10; // Default below icon
+
+    // Adjust if popup goes off-screen horizontally
     if (left < 10) left = 10;
     if (left + popupWidth > window.innerWidth - 10) {
         left = window.innerWidth - popupWidth - 10;
     }
-    if (top + 300 > window.innerHeight - 10) { // Assuming popup height ~300px
-        top = iconRect.top - 300 - 10; // Position above icon
-        if (top < 10) top = 10;
+    // Adjust if popup goes off-screen vertically
+    if (top + popupHeight > window.innerHeight - 10) { // If not enough space below
+        top = iconRect.top - popupHeight - 10; // Try above icon
     }
+    if (top < 10) { // If still not enough space (or not enough above)
+        top = Math.max(10, window.innerHeight - popupHeight - 10); // Stick to bottom edge or top if very tall screen
+    }
+
 
     setPopupAnchorPosition({ top, left });
     setIsElementContextPopupOpen(true);
-    setInspectIconTarget(null); // Hide the icon itself once popup is open
+    setInspectIconTarget(null); // Hide the icon itself once popup is open, highlight remains
   }, [highlightedElementDetails]);
+
+  const closeElementContextPopup = useCallback(() => {
+    setIsElementContextPopupOpen(false);
+    setCurrentPopupElementInfo(null);
+    setHighlightedElementDetails(null); 
+    setInspectIconTarget(null);
+  }, []);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         if (isElementContextPopupOpen) {
-          setIsElementContextPopupOpen(false);
-          setCurrentPopupElementInfo(null);
-          // Keep highlightedElementDetails so border remains until mouse moves or selector off
+          closeElementContextPopup();
         } else if (isElementSelectorActive) {
-          setIsElementSelectorActive(false);
+          setIsElementSelectorActive(false); // This will trigger the cleanup in the else block below
           toast({ title: "Element Selector Deactivated", description: "Pressed ESC key."});
         }
       }
@@ -242,19 +244,20 @@ export function ReflectFlowOverlay() {
 
     if (isElementSelectorActive) {
       document.addEventListener('keydown', handleKeyDown);
-      if (!isElementContextPopupOpen) { // Only add mouse listeners if popup is NOT open
+      if (!isElementContextPopupOpen) {
         document.addEventListener('mouseover', handleMouseOver);
         document.addEventListener('mouseout', handleMouseOut);
-      } else { // Popup IS open, remove mouse listeners
+      } else { 
         document.removeEventListener('mouseover', handleMouseOver);
         document.removeEventListener('mouseout', handleMouseOut);
         if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
       }
-    } else { // Selector not active
+    } else { 
       document.removeEventListener('mouseover', handleMouseOver);
       document.removeEventListener('mouseout', handleMouseOut);
       document.removeEventListener('keydown', handleKeyDown);
       if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
+      
       setHighlightedElementDetails(null);
       setInspectIconTarget(null);
       setIsElementContextPopupOpen(false);
@@ -267,7 +270,7 @@ export function ReflectFlowOverlay() {
       document.removeEventListener('keydown', handleKeyDown);
       if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
     };
-  }, [isElementSelectorActive, isElementContextPopupOpen, handleMouseOver, handleMouseOut, toast]);
+  }, [isElementSelectorActive, isElementContextPopupOpen, handleMouseOver, handleMouseOut, toast, closeElementContextPopup]);
 
 
   const handlePlayAll = useCallback(() => {
@@ -303,14 +306,12 @@ export function ReflectFlowOverlay() {
         title: "Element Selector Deactivated",
         description: "Element inspection is off.",
       });
-      setHighlightedElementDetails(null);
-      setInspectIconTarget(null);
-      setIsElementContextPopupOpen(false);
+      // State clearing for deactivation is handled in the useEffect
     }
   }, [isElementSelectorActive, toast]);
 
   const handleCommandSelected = useCallback((command: string, targetElementInfo: ElementInfoForPopup) => {
-    const selector = targetElementInfo.id ? `#${CSS.escape(targetElementInfo.id)}` : targetElementInfo.cssSelector || 'N/A';
+    const selector = targetElementInfo.id ? `#${CSS.escape(targetElementInfo.id)}` : targetElementInfo.cssSelector || targetElementInfo.xpath || 'N/A';
     const tagName = targetElementInfo.tagName || 'element';
     let newStep: Step | null = null;
     let toastMessage = "";
@@ -357,7 +358,7 @@ export function ReflectFlowOverlay() {
       case 'waitForVisible':
         newStep = {
           id: String(Date.now()) + Math.random().toString(36).substring(2,7),
-          type: 'assert', selector, description: `Wait for ${tagName} (${selector}) to be visible`,
+          type: 'assert', selector, description: `Wait for ${tagName} (${selector}) to be visible`, // Using 'assert' type for waits for now
           params: { waitType: 'isVisible', timeout: 5000 }, 
         };
         toastMessage = `Wait (For Visible) for ${selector} added.`;
@@ -365,7 +366,7 @@ export function ReflectFlowOverlay() {
       case 'waitForClickable':
         newStep = {
           id: String(Date.now()) + Math.random().toString(36).substring(2,7),
-          type: 'assert', selector, description: `Wait for ${tagName} (${selector}) to be clickable`,
+          type: 'assert', selector, description: `Wait for ${tagName} (${selector}) to be clickable`, // Using 'assert' type for waits for now
           params: { waitType: 'isClickable', timeout: 5000 },
         };
         toastMessage = `Wait (For Clickable) for ${selector} added.`;
@@ -376,13 +377,11 @@ export function ReflectFlowOverlay() {
       setRecordedSteps(prev => [...prev, newStep]);
       toast({ title: "Step Added", description: toastMessage });
     }
-    setIsElementContextPopupOpen(false); // Close popup
-    setCurrentPopupElementInfo(null);
-    // Keep element selector active, but clear current highlight for next interaction.
-    // User might want to inspect another element immediately.
-    setHighlightedElementDetails(null); 
-    setInspectIconTarget(null);
-  }, [toast]);
+    
+    // Close popup and clear inspection state, ready for next element or deactivation
+    closeElementContextPopup();
+
+  }, [toast, closeElementContextPopup]);
 
 
   const handleSaveSession = useCallback(() => {
@@ -414,13 +413,6 @@ export function ReflectFlowOverlay() {
     toast({ title: "Step Deleted", description: "The step has been removed." });
   }, [toast]);
   
-  const closeElementContextPopup = useCallback(() => {
-    setIsElementContextPopupOpen(false);
-    setCurrentPopupElementInfo(null);
-    // Optionally, clear highlight or keep it until next hover
-    // setHighlightedElementDetails(null); 
-    // setInspectIconTarget(null);
-  }, []);
 
   return (
     <div ref={overlayRef} className="fixed top-0 right-0 h-full p-4 flex flex-col items-end z-[1000] pointer-events-none">
@@ -434,11 +426,6 @@ export function ReflectFlowOverlay() {
                 <CardDescription className="text-xs">Record & Playback UI Interactions</CardDescription>
               </div>
             </div>
-            {/* This button is now less relevant for element popup, can be removed or repurposed
-            <Button variant="ghost" size="sm" onClick={() => setIsInspectorPanelVisible(prev => !prev)} className="text-xs">
-              {isInspectorPanelVisible ? "Hide" : "Show"} Inspector
-            </Button>
-            */}
           </div>
           <div className="mt-4">
             <HeaderControls
@@ -479,20 +466,18 @@ export function ReflectFlowOverlay() {
         )}
       </Card>
 
-      {/* Clickable Icon that appears on hover */}
       {isElementSelectorActive && inspectIconTarget && !isElementContextPopupOpen && (() => {
           const rect = inspectIconTarget.getBoundingClientRect();
-          // Attempt to center the icon on the element, adjust as needed
-          const iconSize = 32; // Assuming h-8 w-8 for the button
+          const iconSize = 32; 
           let iconTop = rect.top + rect.height / 2 - iconSize / 2;
           let iconLeft = rect.left + rect.width / 2 - iconSize / 2;
 
-          // Ensure icon stays within viewport bounds slightly
           iconTop = Math.max(8, Math.min(iconTop, window.innerHeight - iconSize - 8));
           iconLeft = Math.max(8, Math.min(iconLeft, window.innerWidth - iconSize - 8));
           
           return (
               <Button
+                  data-reflectflow-icon="true" // Attribute to identify the icon
                   variant="outline"
                   size="icon"
                   className="fixed h-8 w-8 bg-background shadow-lg rounded-full p-0 z-[10001] pointer-events-auto"
@@ -519,3 +504,4 @@ export function ReflectFlowOverlay() {
     </div>
   );
 }
+
