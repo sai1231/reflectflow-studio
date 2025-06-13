@@ -19,7 +19,9 @@ import {
   SaveIcon,
   DragHandleIcon,
   MoreOptionsIcon,
-  ActionIcon 
+  ActionIcon,
+  ChevronDownIcon,
+  ChevronUpIcon
 } from './icons'; 
 import {
   DropdownMenu,
@@ -51,9 +53,17 @@ const getIconForStep = (type: Step['type']): React.ElementType => {
 
 export function StepItem({ step, isSelected, onSelect, onUpdateStep, onDeleteStep }: StepItemProps) {
   const [editableStep, setEditableStep] = useState<Step>(() => JSON.parse(JSON.stringify(step)));
+  const [isExpanded, setIsExpanded] = useState(false); // Collapsed by default
 
   useEffect(() => {
-    setEditableStep(JSON.parse(JSON.stringify(step)));
+    // If the step prop changes externally, update our editable copy
+    // and potentially reset expansion if the step ID changes (new step essentially)
+    const newEditableStep = JSON.parse(JSON.stringify(step));
+    if (editableStep.id !== newEditableStep.id) {
+      setIsExpanded(false); // Collapse if it's effectively a new step
+    }
+    setEditableStep(newEditableStep);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step]);
   
   const CurrentStepIcon = getIconForStep(editableStep.type);
@@ -111,10 +121,15 @@ export function StepItem({ step, isSelected, onSelect, onUpdateStep, onDeleteSte
       finalStep.selectors = [finalStep.selector];
     }
     onUpdateStep(finalStep);
+    setIsExpanded(false); // Optionally collapse after save
   };
   
   const handleDelete = () => {
     onDeleteStep(editableStep.id);
+  };
+
+  const toggleExpand = () => {
+    setIsExpanded(prev => !prev);
   };
 
   const renderStepDetailsSummary = () => {
@@ -297,6 +312,10 @@ export function StepItem({ step, isSelected, onSelect, onUpdateStep, onDeleteSte
               {renderStepDetailsSummary()}
             </div>
             
+            <Button variant="ghost" size="icon" onClick={toggleExpand} className="h-8 w-8 flex-shrink-0" aria-label={isExpanded ? "Collapse details" : "Expand details"}>
+              {isExpanded ? <ChevronUpIcon className="h-4 w-4" /> : <ChevronDownIcon className="h-4 w-4" />}
+            </Button>
+
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button 
@@ -322,7 +341,7 @@ export function StepItem({ step, isSelected, onSelect, onUpdateStep, onDeleteSte
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
-          {renderEditableFields()}
+          {isExpanded && renderEditableFields()}
         </CardContent>
       </Card>
     </TooltipProvider>
