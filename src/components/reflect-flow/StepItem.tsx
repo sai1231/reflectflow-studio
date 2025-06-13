@@ -15,7 +15,6 @@ import {
   NavigateIcon,
   ScrollIcon,
   AssertIcon, 
-  EditIcon,
   DeleteIcon,
   SaveIcon,
   DragHandleIcon,
@@ -51,15 +50,11 @@ const getIconForStep = (type: Step['type']): React.ElementType => {
 };
 
 export function StepItem({ step, isSelected, onSelect, onUpdateStep, onDeleteStep }: StepItemProps) {
-  const [isEditing, setIsEditing] = useState(false);
   const [editableStep, setEditableStep] = useState<Step>(() => JSON.parse(JSON.stringify(step)));
 
   useEffect(() => {
-    // Update editableStep if the step prop changes and we are not in editing mode
-    if (!isEditing) {
-      setEditableStep(JSON.parse(JSON.stringify(step)));
-    }
-  }, [step, isEditing]);
+    setEditableStep(JSON.parse(JSON.stringify(step)));
+  }, [step]);
   
   const CurrentStepIcon = getIconForStep(editableStep.type);
 
@@ -116,24 +111,13 @@ export function StepItem({ step, isSelected, onSelect, onUpdateStep, onDeleteSte
       finalStep.selectors = [finalStep.selector];
     }
     onUpdateStep(finalStep);
-    setIsEditing(false); 
-  };
-
-  const toggleEditMode = () => {
-    if (isEditing) {
-      setEditableStep(JSON.parse(JSON.stringify(step))); 
-      setIsEditing(false);
-    } else {
-      setEditableStep(JSON.parse(JSON.stringify(step))); 
-      setIsEditing(true);
-    }
   };
   
   const handleDelete = () => {
     onDeleteStep(editableStep.id);
   };
 
-  const renderStepDetails = () => {
+  const renderStepDetailsSummary = () => {
     const currentDisplayStep = editableStep; 
     const primarySelector = currentDisplayStep.selector || (currentDisplayStep.selectors && currentDisplayStep.selectors[0]) || 'N/A';
     switch (currentDisplayStep.type) {
@@ -310,7 +294,7 @@ export function StepItem({ step, isSelected, onSelect, onUpdateStep, onDeleteSte
             </Tooltip>
             <div className="flex-grow truncate min-w-0">
               <p className="text-sm font-medium truncate" title={editableStep.description}>{editableStep.description}</p>
-              {renderStepDetails()}
+              {renderStepDetailsSummary()}
             </div>
             
             <DropdownMenu>
@@ -331,24 +315,17 @@ export function StepItem({ step, isSelected, onSelect, onUpdateStep, onDeleteSte
                 align="end"
                 onCloseAutoFocus={(e) => e.preventDefault()}
               >
-                <DropdownMenuItem onSelect={toggleEditMode}>
-                  <EditIcon className="mr-2 h-4 w-4" />
-                  {isEditing ? 'Cancel Edit' : 'Edit Step'} 
-                </DropdownMenuItem>
                 <DropdownMenuItem onSelect={handleDelete} className="text-destructive focus:text-destructive focus:bg-destructive/10">
                   <DeleteIcon className="mr-2 h-4 w-4" />
                   Delete Step
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-
           </div>
-          {isEditing && renderEditableFields()}
+          {renderEditableFields()}
         </CardContent>
       </Card>
     </TooltipProvider>
   );
 }
-    
-
     
