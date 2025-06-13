@@ -1,25 +1,30 @@
+
 "use client";
 
 import { Button } from '@/components/ui/button';
-import { RecordIcon, PauseIcon, PlayIcon, AssertIcon, SaveIcon } from './icons';
+import { RecordIcon, PauseIcon, PlayIcon, SaveIcon, TargetIcon } from './icons'; // Removed AssertIcon, Added TargetIcon
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface HeaderControlsProps {
   isRecording: boolean;
   onToggleRecording: () => void;
   onPlayAll: () => void;
-  onAddAssertion: () => void;
+  // onAddAssertion: () => void; // Removed
   onSaveSession: () => void;
   stepCount: number;
+  isElementSelectorActive: boolean; // Added
+  onToggleElementSelector: () => void; // Added
 }
 
 export function HeaderControls({
   isRecording,
   onToggleRecording,
   onPlayAll,
-  onAddAssertion,
+  // onAddAssertion, // Removed
   onSaveSession,
-  stepCount
+  stepCount,
+  isElementSelectorActive, // Added
+  onToggleElementSelector, // Added
 }: HeaderControlsProps) {
   return (
     <TooltipProvider delayDuration={300}>
@@ -38,6 +43,18 @@ export function HeaderControls({
 
         <Tooltip>
           <TooltipTrigger asChild>
+            <Button onClick={onToggleElementSelector} variant={isElementSelectorActive ? "secondary" : "outline"} size="sm">
+              <TargetIcon className="mr-2 h-4 w-4" />
+              Selector
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>{isElementSelectorActive ? 'Deactivate Element Selector' : 'Activate Element Selector (Mock)'}</p>
+          </TooltipContent>
+        </Tooltip>
+
+        <Tooltip>
+          <TooltipTrigger asChild>
             <Button onClick={onPlayAll} variant="outline" size="sm" disabled={isRecording || stepCount === 0}>
               <PlayIcon className="mr-2 h-4 w-4" />
               Play All
@@ -48,6 +65,7 @@ export function HeaderControls({
           </TooltipContent>
         </Tooltip>
         
+        {/* Removed Assertion Button
         <Tooltip>
           <TooltipTrigger asChild>
             <Button onClick={onAddAssertion} variant="outline" size="sm" disabled={isRecording}>
@@ -59,6 +77,7 @@ export function HeaderControls({
             <p>Add an assertion step</p>
           </TooltipContent>
         </Tooltip>
+        */}
 
          <Tooltip>
           <TooltipTrigger asChild>

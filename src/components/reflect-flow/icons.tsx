@@ -1,3 +1,4 @@
+
 import {
   Mic,
   Pause,
@@ -22,7 +23,8 @@ import {
   Copy,
   ClipboardCheck,
   AlertTriangle,
-  CircleDot
+  CircleDot,
+  Target // Added Target icon
 } from 'lucide-react';
 
 export const RecordIcon = CircleDot; // Changed from Mic / RadioTower for simplicity
@@ -35,7 +37,7 @@ export const TypeActionIcon = TypeIcon;
 export const NavigateIcon = Navigation;
 export const ScrollIcon = ArrowDownUp;
 export const SubmitIcon = Send;
-export const AssertIcon = ShieldCheck;
+export const AssertIcon = ShieldCheck; // Kept for StepItem, but removed from HeaderControls
 export const SaveIcon = Save;
 export const CheckboxSquareIcon = CheckSquare;
 export const CheckboxUncheckedIcon = Square;
@@ -48,3 +50,5 @@ export const FileIcon = FileText;
 export const CopyIcon = Copy;
 export const PasteIcon = ClipboardCheck;
 export const WarningIcon = AlertTriangle;
+export const TargetIcon = Target; // Exported TargetIcon
+

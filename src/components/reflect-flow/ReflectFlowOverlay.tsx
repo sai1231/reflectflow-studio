@@ -16,6 +16,7 @@ export function ReflectFlowOverlay() {
   const [recordedSteps, setRecordedSteps] = useState<Step[]>([]);
   const [selectedSteps, setSelectedSteps] = useState<string[]>([]);
   const [isPopupVisible, setIsPopupVisible] = useState(false);
+  const [isElementSelectorActive, setIsElementSelectorActive] = useState(false); // Added state for element selector
   const overlayRef = useRef<HTMLDivElement>(null);
 
   const { toast } = useToast();
@@ -38,13 +39,10 @@ export function ReflectFlowOverlay() {
 
   const handleClick = useCallback((event: MouseEvent) => {
     if (overlayRef.current && overlayRef.current.contains(event.target as Node)) {
-      // Click is inside the ReflectFlow overlay UI, ignore it.
       return;
     }
 
     const target = event.target as HTMLElement;
-
-    // Ignore clicks on non-element targets, or too-generic elements like body/html
     if (!target || !target.tagName || target === document.body || target === document.documentElement) {
       return;
     }
@@ -56,7 +54,6 @@ export function ReflectFlowOverlay() {
       selector = `#${target.id}`;
       descriptionDetailText = selector;
     } else {
-      // Try to find a more "significant" class, avoiding common layout/utility classes
       const significantClass = Array.from(target.classList).find(
         c => c.trim() !== '' && !/^(bg-|text-|border-|p-|m-|flex|grid|item|justify|self-|gap-|rounded|shadow-|w-|h-)/.test(c)
       );
@@ -87,11 +84,10 @@ export function ReflectFlowOverlay() {
 
   useEffect(() => {
     if (isRecording) {
-      document.addEventListener('click', handleClick, true); // Use capture phase
+      document.addEventListener('click', handleClick, true);
     } else {
       document.removeEventListener('click', handleClick, true);
     }
-
     return () => {
       document.removeEventListener('click', handleClick, true);
     };
@@ -113,17 +109,28 @@ export function ReflectFlowOverlay() {
     toast({ title: "Playing Selected Steps (Simulated)", description: `Actual playback logic for ${selectedSteps.length} step(s) not yet implemented.` });
   }, [selectedSteps, toast]);
 
-  const handleAddAssertion = useCallback(() => {
-    const newAssertion: Step = {
-      id: String(Date.now()) + Math.random().toString(36).substring(2,7),
-      type: 'assert',
-      description: 'New Assertion (Edit details below)',
-      selector: 'body', 
-      params: { property: '', expected: '' } // Initialize params
-    };
-    setRecordedSteps(prev => [...prev, newAssertion]);
-    toast({ title: "Assertion Added", description: "A new assertion step has been added. Edit its details in the list." });
-  }, [toast]);
+  // Removed handleAddAssertion
+  // const handleAddAssertion = useCallback(() => {
+  //   const newAssertion: Step = {
+  //     id: String(Date.now()) + Math.random().toString(36).substring(2,7),
+  //     type: 'assert',
+  //     description: 'New Assertion (Edit details below)',
+  //     selector: 'body', 
+  //     params: { property: '', expected: '' }
+  //   };
+  //   setRecordedSteps(prev => [...prev, newAssertion]);
+  //   toast({ title: "Assertion Added", description: "A new assertion step has been added. Edit its details in the list." });
+  // }, [toast]);
+
+  const handleToggleElementSelector = useCallback(() => { // Added handler
+    const newIsActive = !isElementSelectorActive;
+    setIsElementSelectorActive(newIsActive);
+    toast({
+      title: newIsActive ? "Element Selector Activated" : "Element Selector Deactivated",
+      description: newIsActive ? "Hover over elements to inspect (mock)." : "Element inspection is off.",
+    });
+  }, [isElementSelectorActive, toast]);
+
 
   const handleSaveSession = useCallback(() => {
     toast({ title: "Session Saved (Simulated)", description: "Actual saving logic not yet implemented." });
@@ -181,9 +188,11 @@ export function ReflectFlowOverlay() {
               isRecording={isRecording}
               onToggleRecording={handleToggleRecording}
               onPlayAll={handlePlayAll}
-              onAddAssertion={handleAddAssertion}
+              // onAddAssertion={handleAddAssertion} // Removed
               onSaveSession={handleSaveSession}
               stepCount={recordedSteps.length}
+              isElementSelectorActive={isElementSelectorActive} // Added
+              onToggleElementSelector={handleToggleElementSelector} // Added
             />
           </div>
         </CardHeader>
@@ -213,7 +222,7 @@ export function ReflectFlowOverlay() {
           </CardFooter>
         )}
       </Card>
-      <ElementHoverPopup elementInfo={mockElementInfo} isVisible={isPopupVisible} />
+      <ElementHoverPopup elementInfo={mockElementInfo} isVisible={isPopupVisible && isElementSelectorActive} /> {/* Conditionally show popup */}
     </div>
   );
 }
