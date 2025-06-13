@@ -13,21 +13,20 @@ export function HighlightOverlay({ targetElement }: HighlightOverlayProps) {
   }
 
   const rect = targetElement.getBoundingClientRect();
-  const scrollTop = window.scrollY || document.documentElement.scrollTop;
-  const scrollLeft = window.scrollX || document.documentElement.scrollLeft;
 
   return (
     <div
       style={{
-        position: 'absolute', // Use absolute positioning relative to the document
-        top: `${rect.top + scrollTop}px`,
-        left: `${rect.left + scrollLeft}px`,
+        position: 'fixed', // Changed to fixed
+        top: `${rect.top}px`, // Use rect.top directly
+        left: `${rect.left}px`, // Use rect.left directly
         width: `${rect.width}px`,
         height: `${rect.height}px`,
-        border: '2px dashed red',
+        border: '2px dashed hsl(var(--destructive))', // Use theme color
         pointerEvents: 'none', // Important: allows clicks to pass through
-        zIndex: 9998, // High z-index but below ReflectFlowOverlay itself
+        zIndex: 9998, // High z-index but below ReflectFlowOverlay's main panel
         boxSizing: 'border-box',
+        borderRadius: '2px', // Slight rounding
       }}
       data-testid="highlight-overlay"
     />
