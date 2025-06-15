@@ -11,6 +11,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Badge } from '@/components/ui/badge';
 
 import {
   ClickIcon,
@@ -66,13 +67,12 @@ export function StepItem({ step, isSelected, onSelect, onUpdateStep, onDeleteSte
 
   useEffect(() => {
     const newEditableStep = JSON.parse(JSON.stringify(step));
-     // If the step ID changes, it means it's a new step instance from the list, so collapse it.
     if (editableStep.id !== newEditableStep.id) {
         setIsExpanded(false);
     }
     setEditableStep(newEditableStep);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step]); // Only re-run if the `step` prop itself changes reference
+  }, [step]); 
   
   const CurrentStepIcon = getIconForStep(editableStep.type);
 
@@ -90,10 +90,9 @@ export function StepItem({ step, isSelected, onSelect, onUpdateStep, onDeleteSte
       const newSelectors = [...(prev.selectors || [])];
       if (index < newSelectors.length) {
         newSelectors[index] = value;
-      } else if (index === newSelectors.length) { // Adding a new selector if index is at the end
+      } else if (index === newSelectors.length) { 
         newSelectors.push(value);
       }
-      // Update the primary 'selector' field for convenience if it exists
       const primarySelector = newSelectors[0] || '';
       return { ...prev, selectors: newSelectors, selector: primarySelector };
     });
@@ -101,7 +100,7 @@ export function StepItem({ step, isSelected, onSelect, onUpdateStep, onDeleteSte
   
   const handleAddSelector = () => {
     setEditableStep(prev => {
-      const newSelectors = [...(prev.selectors || []), '']; // Add an empty selector
+      const newSelectors = [...(prev.selectors || []), '']; 
       return { ...prev, selectors: newSelectors };
     });
   };
@@ -109,7 +108,7 @@ export function StepItem({ step, isSelected, onSelect, onUpdateStep, onDeleteSte
   const handleRemoveSelector = (index: number) => {
     setEditableStep(prev => {
       const newSelectors = [...(prev.selectors || [])];
-      if (newSelectors.length > 1 && index < newSelectors.length) { // Prevent removing the last selector easily
+      if (newSelectors.length > 1 && index < newSelectors.length) { 
         newSelectors.splice(index, 1);
       }
       const primarySelector = newSelectors[0] || '';
@@ -120,14 +119,11 @@ export function StepItem({ step, isSelected, onSelect, onUpdateStep, onDeleteSte
 
   const handleSaveChanges = () => {
     let finalStep = { ...editableStep };
-    // Ensure primary selector is synced if selectors array exists and is not empty
     if (finalStep.selectors && finalStep.selectors.length > 0) {
       finalStep.selector = finalStep.selectors[0];
     } else if (finalStep.selector && (!finalStep.selectors || finalStep.selectors.length === 0)) {
-      // If only primary selector exists, ensure selectors array reflects this
       finalStep.selectors = [finalStep.selector];
     } else if (!finalStep.selector && (!finalStep.selectors || finalStep.selectors.length === 0)) {
-      // If neither exists, and the step type expects selectors, initialize them
       if (['click', 'type', 'waitForElement', 'doubleClick', 'moveTo', 'scroll'].includes(finalStep.type) && finalStep.type !== 'scroll' && (finalStep as ScrollStep).selectors?.[0] !== 'document') {
         finalStep.selectors = [''];
         finalStep.selector = '';
@@ -177,7 +173,7 @@ export function StepItem({ step, isSelected, onSelect, onUpdateStep, onDeleteSte
           className="text-sm h-8 col-span-2"
         />
       </div>
-      {(editableStep.type !== 'navigate' && editableStep.type !== 'keyDown' && editableStep.type !== 'keyUp' && !(editableStep.type === 'scroll' && editableStep.selectors?.[0] === 'document')) && (
+      {(editableStep.type !== 'navigate' && editableStep.type !== 'keyDown' && editableStep.type !== 'keyUp' && !(editableStep.type === 'scroll' && (editableStep as ScrollStep).selectors?.[0] === 'document')) && (
         <>
           {(editableStep.selectors || []).map((sel, index) => (
             <div key={index} className="grid grid-cols-3 gap-2 items-center">
@@ -198,9 +194,14 @@ export function StepItem({ step, isSelected, onSelect, onUpdateStep, onDeleteSte
               </div>
             </div>
           ))}
-          <Button type="button" variant="outline" size="sm" onClick={handleAddSelector} className="h-7 text-xs mt-1 col-start-2 col-span-2">
-            Add Selector
-          </Button>
+          <div className="grid grid-cols-3 gap-2 items-center">
+            <div></div> {/* Empty cell for alignment */}
+            <div className="col-span-2">
+                <Button type="button" variant="outline" size="sm" onClick={handleAddSelector} className="h-7 text-xs mt-1 w-full">
+                Add Selector
+                </Button>
+            </div>
+          </div>
         </>
       )}
       <div className="grid grid-cols-3 gap-2 items-center">
@@ -244,8 +245,6 @@ export function StepItem({ step, isSelected, onSelect, onUpdateStep, onDeleteSte
         </div>
       )}
 
-      {/* offsetX, offsetY, duration removed from click, doubleClick, moveTo */}
-
       {(editableStep.type === 'keyDown' || editableStep.type === 'keyUp') && (
         <div className="grid grid-cols-3 gap-2 items-center">
           <Label htmlFor={`key-${editableStep.id}`} className="text-xs">Key</Label>
@@ -273,7 +272,6 @@ export function StepItem({ step, isSelected, onSelect, onUpdateStep, onDeleteSte
       )}
 
       {editableStep.type === 'scroll' && (editableStep as ScrollStep).selectors?.[0] === 'document' && (
-        // Only show x, y for document scroll
          <>
          <div className="grid grid-cols-3 gap-2 items-center">
             <Label htmlFor={`scrollX-${editableStep.id}`} className="text-xs">Scroll X</Label>
@@ -285,8 +283,6 @@ export function StepItem({ step, isSelected, onSelect, onUpdateStep, onDeleteSte
          </div>
         </>
       )}
-       {/* For scroll to element, selectors are handled by common fields, no specific X/Y */}
-
 
       {editableStep.type === 'waitForElement' && (
         <>
@@ -325,7 +321,7 @@ export function StepItem({ step, isSelected, onSelect, onUpdateStep, onDeleteSte
                 let val: string | number | boolean = valStr;
                 if (valStr.toLowerCase() === 'true') val = true;
                 else if (valStr.toLowerCase() === 'false') val = false;
-                else if (valStr === '' && (editableStep as WaitForElementStep).operator === 'exists') val = true; // Default for exists
+                else if (valStr === '' && (editableStep as WaitForElementStep).operator === 'exists') val = true; 
                 else if (!isNaN(parseFloat(valStr)) && isFinite(Number(valStr))) val = parseFloat(valStr);
                 handleInputChange('expectedValue', val);
               }}
@@ -362,6 +358,7 @@ export function StepItem({ step, isSelected, onSelect, onUpdateStep, onDeleteSte
                 <p>Type: {editableStep.type}</p>
               </TooltipContent>
             </Tooltip>
+            <Badge variant="outline" className="text-xs capitalize h-6 px-2 py-1">{editableStep.type}</Badge>
             <div className="flex-grow truncate min-w-0" onClick={toggleExpand} role="button" tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && toggleExpand()} aria-expanded={isExpanded}>
               <p className="text-sm font-medium truncate" title={editableStep.description}>{editableStep.description}</p>
               {!isExpanded && renderStepDetailsSummary()}
@@ -371,7 +368,7 @@ export function StepItem({ step, isSelected, onSelect, onUpdateStep, onDeleteSte
               {isExpanded ? <ChevronUpIcon className="h-4 w-4" /> : <ChevronDownIcon className="h-4 w-4" />}
             </Button>
 
-            <DropdownMenu onOpenChange={(open) => { if (open && isExpanded) setIsExpanded(false); /* Close expanded view if opening menu */ }}>
+            <DropdownMenu onOpenChange={(open) => { if (open && isExpanded) setIsExpanded(false); }}>
               <DropdownMenuTrigger asChild>
                 <Button 
                   variant="ghost" 
@@ -403,3 +400,4 @@ export function StepItem({ step, isSelected, onSelect, onUpdateStep, onDeleteSte
     </TooltipProvider>
   );
 }
+
