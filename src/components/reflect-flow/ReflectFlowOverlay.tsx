@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useCallback, useEffect, useRef } from 'react';
-import type { Step, NavigateStep, ClickStep, TypeStep, ScrollStep, WaitForElementStep, KeyDownStep, KeyUpStep, DoubleClickStep, MoveToStep } from '@/types';
+import type { Step, StepType, NavigateStep, ClickStep, TypeStep, ScrollStep, WaitForElementStep, KeyDownStep, KeyUpStep, DoubleClickStep, MoveToStep } from '@/types';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { HeaderControls } from './HeaderControls';
@@ -10,7 +10,14 @@ import { StepList } from './StepList';
 import { ElementHoverPopup } from './ElementHoverPopup';
 import { HighlightOverlay } from './HighlightOverlay';
 import { useToast } from '@/hooks/use-toast';
-import { PlayIcon, CheckboxSquareIcon, CheckboxUncheckedIcon, FileIcon, TargetIcon } from './icons';
+import { PlayIcon, CheckboxSquareIcon, CheckboxUncheckedIcon, FileIcon, TargetIcon, AddIcon, NavigateIcon, ClickIcon as ClickActionIcon, TypeActionIcon as TypeActionIconLucide, ScrollIcon as ScrollActionIcon, AssertIcon as WaitActionIcon, KeyboardIcon as KeyActionIcon, MoveToIcon as MoveActionIcon } from './icons'; // Added AddIcon and specific action icons
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+
 
 interface ElementDetails {
   element: HTMLElement;
@@ -161,7 +168,7 @@ export function ReflectFlowOverlay() {
   }, [handleMouseMoveDraggable]);
 
   const handleMouseDownDraggable = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
-    if ((event.target as HTMLElement).closest('button, input, [role="button"], [role="menuitem"]')) {
+    if ((event.target as HTMLElement).closest('button, input, [role="button"], [role="menuitem"], [role="option"]')) {
         return;
     }
     event.preventDefault();
@@ -208,22 +215,24 @@ export function ReflectFlowOverlay() {
     }
 
     const elementInfo = generateElementInfo(target);
-    const primarySelector = elementInfo.id || elementInfo.cssSelector || elementInfo.xpath || 'N/A';
     const selectors: string[] = [];
     if (elementInfo.id) selectors.push(elementInfo.id);
     if (elementInfo.cssSelector && elementInfo.cssSelector !== elementInfo.id) selectors.push(elementInfo.cssSelector);
     if (elementInfo.xpath && !selectors.includes(elementInfo.xpath)) selectors.push(elementInfo.xpath);
     if (selectors.length === 0) selectors.push(elementInfo.tagName || 'unknown');
 
+    const primarySelector = selectors[0] || 'N/A';
 
     const description = `Click on ${elementInfo.tagName}${primarySelector !== elementInfo.tagName ? ` (${primarySelector})` : ''}`;
 
     const newStep: ClickStep = {
       id: String(Date.now()) + Math.random().toString(36).substring(2,7),
       type: 'click',
-      selector: primarySelector, // Still useful for quick display
-      selectors: selectors, // Store all generated selectors
+      selector: primarySelector,
+      selectors: selectors, 
       description: description,
+      target: 'main',
+      timeout: 5000,
     };
 
     setRecordedSteps(prevSteps => [...prevSteps, newStep]);
@@ -380,7 +389,6 @@ export function ReflectFlowOverlay() {
   }, [isElementSelectorActive, toast]);
 
   const handleCommandSelected = useCallback((command: string, targetElementInfo: ElementInfoForPopup) => {
-    // Generate all available selectors from the target element info
     const allSelectors: string[] = [];
     if (targetElementInfo.id) allSelectors.push(targetElementInfo.id);
     if (targetElementInfo.cssSelector && targetElementInfo.cssSelector !== targetElementInfo.id) {
@@ -389,21 +397,17 @@ export function ReflectFlowOverlay() {
     if (targetElementInfo.xpath && !allSelectors.includes(targetElementInfo.xpath)) {
         allSelectors.push(targetElementInfo.xpath);
     }
-    // Fallback if no specific selectors found
     if (allSelectors.length === 0 && targetElementInfo.tagName) {
         allSelectors.push(targetElementInfo.tagName);
     } else if (allSelectors.length === 0) {
         allSelectors.push('N/A');
     }
     
-    // Use the first selector as the primary display selector, or 'N/A'
     const primarySelector = allSelectors[0];
-    
     const tagName = targetElementInfo.tagName || 'element';
     let newStep: Step | null = null;
     let toastMessage = "";
     const baseId = String(Date.now()) + Math.random().toString(36).substring(2,7);
-
     const defaultTimeout = 5000;
     const defaultTarget = 'main';
 
@@ -421,7 +425,7 @@ export function ReflectFlowOverlay() {
         toastMessage = `Set Value (type) action for ${primarySelector} added. Edit to set text.`;
         break;
       case 'actionAddValue': 
-        newStep = { id: baseId, type: 'type', value: '', selectors: allSelectors, selector: primarySelector, description: `Add Value to ${tagName} (${primarySelector})`, target: defaultTarget, timeout: defaultTimeout } as TypeStep; // Differentiate via description or future param
+        newStep = { id: baseId, type: 'type', value: '', selectors: allSelectors, selector: primarySelector, description: `Add Value to ${tagName} (${primarySelector})`, target: defaultTarget, timeout: defaultTimeout } as TypeStep;
         toastMessage = `Add Value (type) action for ${primarySelector} added. Edit to set text.`;
         break;
       case 'actionClearValue': 
@@ -436,7 +440,6 @@ export function ReflectFlowOverlay() {
         newStep = { id: baseId, type: 'moveTo', selectors: allSelectors, selector: primarySelector, description: `Move to ${tagName} (${primarySelector})`, target: defaultTarget, timeout: defaultTimeout } as MoveToStep;
         toastMessage = `Move To action for ${primarySelector} added.`;
         break;
-
       case 'assertIsVisible':
         newStep = { id: baseId, type: 'waitForElement', selectors: allSelectors, selector: primarySelector, description: `Assert ${tagName} (${primarySelector}) is visible`, property: 'visible', expectedValue: true, operator: '==', target: defaultTarget, timeout: defaultTimeout } as WaitForElementStep;
         toastMessage = `Assertion (Is Visible) for ${primarySelector} added.`;
@@ -465,7 +468,6 @@ export function ReflectFlowOverlay() {
         newStep = { id: baseId, type: 'waitForElement', selectors: allSelectors, selector: primarySelector, description: `Assert location of ${tagName} (${primarySelector})`, property: 'location.x', expectedValue: 0, operator: '==', target: defaultTarget, timeout: defaultTimeout } as WaitForElementStep;
         toastMessage = `Assertion (Get Location - x) for ${primarySelector} added. Edit expected value / add y.`;
         break;
-        
       case 'waitForVisible':
         newStep = { id: baseId, type: 'waitForElement', selectors: allSelectors, selector: primarySelector, description: `Wait for ${tagName} (${primarySelector}) to be visible`, property: 'visible', expectedValue: true, operator: '==', target: defaultTarget, timeout: defaultTimeout } as WaitForElementStep;
         toastMessage = `Wait (For Visible) for ${primarySelector} added.`;
@@ -498,6 +500,70 @@ export function ReflectFlowOverlay() {
     }
     closeElementContextMenu(); 
   }, [toast, closeElementContextMenu]);
+
+  const handleAddStep = useCallback((stepType: StepType) => {
+    const baseId = String(Date.now()) + Math.random().toString(36).substring(2, 7);
+    let newStep: Step;
+    const commonFields = {
+        id: baseId,
+        description: `New ${stepType} step`,
+        target: 'main',
+        timeout: 5000,
+    };
+    const commonSelectorFields = {
+        ...commonFields,
+        selectors: [''], 
+        selector: '',    
+    };
+
+    switch (stepType) {
+        case 'navigate':
+            newStep = { ...commonFields, type: 'navigate', url: 'https://', selectors: undefined, selector: undefined } as NavigateStep;
+            break;
+        case 'click':
+            newStep = { ...commonSelectorFields, type: 'click' } as ClickStep;
+            break;
+        case 'doubleClick':
+            newStep = { ...commonSelectorFields, type: 'doubleClick' } as DoubleClickStep;
+            break;
+        case 'type':
+            newStep = { ...commonSelectorFields, type: 'type', value: '' } as TypeStep;
+            break;
+        case 'keyDown':
+            newStep = { ...commonFields, type: 'keyDown', key: 'Enter', selectors: undefined, selector: undefined } as KeyDownStep;
+            break;
+        case 'keyUp':
+            newStep = { ...commonFields, type: 'keyUp', key: 'Enter', selectors: undefined, selector: undefined } as KeyUpStep;
+            break;
+        case 'scroll':
+            newStep = { ...commonFields, type: 'scroll', x: 0, y: 0, selectors: ['document'], selector: 'document' } as ScrollStep; // default to document scroll
+            break;
+        case 'waitForElement':
+            newStep = { ...commonSelectorFields, type: 'waitForElement', property: 'visible', operator: '==', expectedValue: true } as WaitForElementStep;
+            break;
+        case 'moveTo':
+            newStep = { ...commonSelectorFields, type: 'moveTo' } as MoveToStep;
+            break;
+        default:
+            toast({ title: "Error", description: `Unknown step type: ${stepType}`, variant: "destructive" });
+            return;
+    }
+
+    setRecordedSteps(prev => [...prev, newStep]);
+    toast({ title: "Step Added", description: `New ${stepType} step added. Expand to edit.` });
+  }, [toast]);
+
+  const stepTypesForMenu: { type: StepType, label: string, icon: React.ElementType }[] = [
+    { type: 'navigate', label: 'Navigate', icon: NavigateIcon },
+    { type: 'click', label: 'Click', icon: ClickActionIcon },
+    { type: 'doubleClick', label: 'Double Click', icon: ClickActionIcon }, // Using ClickActionIcon for Double Click as well
+    { type: 'type', label: 'Type Text', icon: TypeActionIconLucide },
+    { type: 'keyDown', label: 'Key Down', icon: KeyActionIcon },
+    { type: 'keyUp', label: 'Key Up', icon: KeyActionIcon },
+    { type: 'scroll', label: 'Scroll', icon: ScrollActionIcon },
+    { type: 'waitForElement', label: 'Wait For / Assert', icon: WaitActionIcon },
+    { type: 'moveTo', label: 'Move To', icon: MoveActionIcon },
+  ];
 
 
   const handleSaveSession = useCallback(() => {
@@ -604,20 +670,38 @@ export function ReflectFlowOverlay() {
                 />
               </div>
             </CardContent>
-            {recordedSteps.length > 0 && (
-              <CardFooter className="p-3 border-t flex-col items-start space-y-2">
+            <CardFooter className="p-3 border-t flex flex-col items-start space-y-2">
                 <div className="flex justify-between w-full items-center">
-                  <Button onClick={handleSelectAllSteps} variant="ghost" size="sm" className="text-xs">
-                    {selectedSteps.length === recordedSteps.length ? <CheckboxSquareIcon className="mr-2 h-4 w-4" /> : <CheckboxUncheckedIcon className="mr-2 h-4 w-4" />}
-                    {selectedSteps.length === recordedSteps.length ? 'Deselect All' : 'Select All'} ({selectedSteps.length}/{recordedSteps.length})
-                  </Button>
-                  <Button onClick={handlePlaySelected} variant="default" size="sm" disabled={selectedSteps.length === 0 || isRecording} className="bg-accent hover:bg-accent/90 text-accent-foreground">
-                    <PlayIcon className="mr-2 h-4 w-4" />
-                    Play Selected ({selectedSteps.length})
-                  </Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" size="sm">
+                        <AddIcon className="mr-2 h-4 w-4" /> Add Step
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start">
+                      {stepTypesForMenu.map(stepMeta => (
+                        <DropdownMenuItem key={stepMeta.type} onSelect={() => handleAddStep(stepMeta.type)}>
+                          <stepMeta.icon className="mr-2 h-4 w-4" />
+                          {stepMeta.label}
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+
+                  {recordedSteps.length > 0 && (
+                    <div className="flex items-center space-x-2">
+                        <Button onClick={handleSelectAllSteps} variant="ghost" size="sm" className="text-xs">
+                        {selectedSteps.length === recordedSteps.length ? <CheckboxSquareIcon className="mr-2 h-4 w-4" /> : <CheckboxUncheckedIcon className="mr-2 h-4 w-4" />}
+                        {selectedSteps.length === recordedSteps.length ? 'Deselect All' : 'Select All'} ({selectedSteps.length}/{recordedSteps.length})
+                        </Button>
+                        <Button onClick={handlePlaySelected} variant="default" size="sm" disabled={selectedSteps.length === 0 || isRecording} className="bg-accent hover:bg-accent/90 text-accent-foreground">
+                        <PlayIcon className="mr-2 h-4 w-4" />
+                        Play Selected ({selectedSteps.length})
+                        </Button>
+                    </div>
+                  )}
                 </div>
               </CardFooter>
-            )}
           </>
         )}
       </Card>
