@@ -11,30 +11,38 @@ import {
   DropdownMenuSub,
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
-  DropdownMenuTrigger,
   DropdownMenuPortal
 } from "@/components/ui/dropdown-menu";
+import { availableCommands, type CommandInfo } from '@/lib/commands';
 import {
-  ClickIcon,
-  TypeActionIcon,
-  ScrollIcon,
-  WaitIcon,
-  AssertionIcon,
-  ActionIcon,
-  ViewIcon,
-  GetTextIcon,
-  GetAttributeIcon,
-  IsEnabledIcon,
-  IsExistingIcon,
+  ClickIcon, // For click, doubleClick
+  TypeActionIcon, // For setValue, addValue, clearValue
+  ScrollIcon, // For scrollIntoView
+  WaitIcon, // For Wait For sub-menu trigger
+  AssertionIcon, // For Assertions/State & Data sub-menu trigger
+  ActionIcon, // For Actions sub-menu trigger
+  ViewIcon, // For isDisplayed, waitForDisplayed
+  GetTextIcon, // For getText
+  GetAttributeIcon, // For getAttribute
+  IsEnabledIcon, // For isEnabled, waitForEnabled
+  IsExistingIcon, // For isExisting, waitForExist, getElement, getElements
   AddValueIcon,
   ClearValueIcon,
-  DoubleClickIcon, // Assuming this exists or is similar to ClickIcon
-  MoveToIcon,
-  GetSizeIcon,
-  GetLocationIcon,
-  PlayIcon, // For Wait For Stable (placeholder)
-  // XIcon, // No longer needed for an internal close button
-} from './icons'; // Ensure these icons are correctly mapped or new ones added
+  DoubleClickIcon,
+  MoveToIcon, // For moveTo
+  GetSizeIcon, // For getSize
+  GetLocationIcon, // For getLocation
+  FileCodeIcon, // For getHTML
+  TagsIcon, // For getTagName
+  HelpCircleIcon, // Fallback icon
+  ChevronsUpDownIcon, // For isEqual
+  HandIcon, // for dragAndDrop, touchAction
+  ListChecksIcon, // for selectByAttribute, selectByIndex, selectByVisibleText
+  GetPropertyIcon, // for getProperty
+  Sigma, // Placeholder for getComputedLabel, getComputedRole, nextElement, parentElement, previousElement
+  CheckCircle2, // For isSelected, isFocused
+  PlayIcon, // For isStable, waitForStable (re-using for now)
+} from './icons';
 
 interface ElementInfo {
   id?: string;
@@ -46,19 +54,92 @@ interface ElementInfo {
 interface ElementHoverPopupProps {
   elementInfo: ElementInfo | null;
   isOpen: boolean;
-  onCommandSelected: (command: string, targetElementInfo: ElementInfo) => void;
+  onCommandSelected: (commandKey: string, targetElementInfo: ElementInfo) => void;
   position: { top: number; left: number } | null;
   onClose: () => void;
 }
+
+const getIconForCommandKey = (key: string): React.ElementType => {
+  switch (key) {
+    case 'click': return ClickIcon;
+    case 'doubleClick': return DoubleClickIcon;
+    case 'setValue': case 'addValue': case 'clearValue': return TypeActionIcon;
+    case 'scrollIntoView': return ScrollIcon;
+    case 'moveTo': return MoveToIcon;
+    case 'dragAndDrop': return HandIcon;
+    case 'touchAction': return HandIcon;
+
+    case 'getAttribute': return GetAttributeIcon;
+    case 'getCSSProperty': return GetPropertyIcon; // Re-use
+    case 'getComputedLabel': return Sigma; // Placeholder
+    case 'getComputedRole': return Sigma; // Placeholder
+    case 'getElement': return IsExistingIcon;
+    case 'getElements': return IsExistingIcon;
+    case 'getHTML': return FileCodeIcon;
+    case 'getLocation': return GetLocationIcon;
+    case 'getProperty': return GetPropertyIcon;
+    case 'getSize': return GetSizeIcon;
+    case 'getTagName': return TagsIcon;
+    case 'getText': return GetTextIcon;
+    case 'getValue': return TypeActionIcon; // Similar to typing/setting
+    case 'isClickable': return ClickIcon;
+    case 'isDisplayed': return ViewIcon;
+    case 'isEnabled': return IsEnabledIcon;
+    case 'isEqual': return ChevronsUpDownIcon;
+    case 'isExisting': return IsExistingIcon;
+    case 'isFocused': return CheckCircle2;
+    case 'isSelected': return CheckCircle2; // Re-use
+    case 'isStable': return PlayIcon;
+    case 'nextElement': return Sigma; // Placeholder
+    case 'parentElement': return Sigma; // Placeholder
+    case 'previousElement': return Sigma; // Placeholder
+    
+    case 'selectByAttribute': case 'selectByIndex': case 'selectByVisibleText': return ListChecksIcon;
+
+    case 'waitForClickable': return ClickIcon;
+    case 'waitForDisplayed': return ViewIcon;
+    case 'waitForEnabled': return IsEnabledIcon;
+    case 'waitForExist': return IsExistingIcon;
+    case 'waitForStable': return PlayIcon;
+    default: return HelpCircleIcon;
+  }
+};
+
+// Categorize commands
+const elementCommands = availableCommands.filter(cmd => cmd.isElementCommand);
+
+const actionCommands = elementCommands.filter(cmd =>
+  ['click', 'doubleClick', 'setValue', 'addValue', 'clearValue', 'scrollIntoView', 'moveTo', 'dragAndDrop', 'selectByAttribute', 'selectByIndex', 'selectByVisibleText', 'touchAction'].includes(cmd.key)
+);
+
+const stateAndDataCommands = elementCommands.filter(cmd =>
+  ['getAttribute', 'getCSSProperty', 'getComputedLabel', 'getComputedRole', 'getElement', 'getElements', 'getHTML', 'getLocation', 'getProperty', 'getSize', 'getTagName', 'getText', 'getValue', 'isClickable', 'isDisplayed', 'isEnabled', 'isEqual', 'isExisting', 'isFocused', 'isSelected', 'isStable', 'nextElement', 'parentElement', 'previousElement'].includes(cmd.key)
+);
+
+const waitCommands = elementCommands.filter(cmd =>
+  ['waitForClickable', 'waitForDisplayed', 'waitForEnabled', 'waitForExist', 'waitForStable'].includes(cmd.key)
+);
+
 
 export function ElementHoverPopup({ elementInfo, isOpen, onCommandSelected, position, onClose }: ElementHoverPopupProps) {
   if (!isOpen || !position || !elementInfo) {
     return null;
   }
 
-  const handleSelect = (command: string) => {
-    onCommandSelected(command, elementInfo);
+  const handleSelect = (commandKey: string) => {
+    onCommandSelected(commandKey, elementInfo);
     onClose();
+  };
+
+  const renderCommandItems = (commands: CommandInfo[]) => {
+    return commands.map(cmd => {
+      const IconComponent = getIconForCommandKey(cmd.key);
+      return (
+        <DropdownMenuItem key={cmd.key} onSelect={() => handleSelect(cmd.key)}>
+          <IconComponent className="mr-2 h-4 w-4" /> {cmd.badgeLabel}
+        </DropdownMenuItem>
+      );
+    });
   };
 
   return (
@@ -71,121 +152,62 @@ export function ElementHoverPopup({ elementInfo, isOpen, onCommandSelected, posi
           width: '1px',
           height: '1px',
           opacity: 0,
-          pointerEvents: 'none', // Make sure it doesn't interfere with other interactions
+          pointerEvents: 'none',
         }}
         aria-hidden="true"
       />
       <DropdownMenuPortal>
         <DropdownMenuContent
-          className="w-64"
-          align="start" // Adjust as needed, might want to calculate based on position
+          className="w-64 z-[10002]" // Ensure z-index is high enough
+          align="start"
           sideOffset={5}
-          style={{
-            // Overriding transform to position absolutely based on 'position' prop
-            // This is a bit of a hack if Radix positions it relative to trigger via transform
-            // A more robust way might be to ensure trigger is at position and let Radix handle it.
-            // For now, let's try with default Radix positioning relative to the fixed trigger.
-          }}
-          onCloseAutoFocus={(e) => e.preventDefault()} // Prevent focus shift on close
+          onCloseAutoFocus={(e) => e.preventDefault()}
         >
           <DropdownMenuLabel>Element Actions</DropdownMenuLabel>
           <DropdownMenuSeparator />
 
-          {/* Actions Sub Menu */}
-          <DropdownMenuSub>
-            <DropdownMenuSubTrigger>
-              <ActionIcon className="mr-2 h-4 w-4" /> Actions
-            </DropdownMenuSubTrigger>
-            <DropdownMenuPortal>
-              <DropdownMenuSubContent>
-                <DropdownMenuItem onSelect={() => handleSelect('actionClick')}>
-                  <ClickIcon className="mr-2 h-4 w-4" /> Click
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => handleSelect('actionDoubleClick')}>
-                  <DoubleClickIcon className="mr-2 h-4 w-4" /> Double Click
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => handleSelect('actionSetValue')}>
-                  <TypeActionIcon className="mr-2 h-4 w-4" /> Set Value (Type Text)
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => handleSelect('actionAddValue')}>
-                  <AddValueIcon className="mr-2 h-4 w-4" /> Add Value
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => handleSelect('actionClearValue')}>
-                  <ClearValueIcon className="mr-2 h-4 w-4" /> Clear Value
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => handleSelect('actionScrollIntoView')}>
-                  <ScrollIcon className="mr-2 h-4 w-4" /> Scroll into View
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => handleSelect('actionMoveTo')}>
-                  <MoveToIcon className="mr-2 h-4 w-4" /> Move To
-                </DropdownMenuItem>
-                {/* Add other actions like dragAndDrop, execute, saveScreenshot etc. here */}
-              </DropdownMenuSubContent>
-            </DropdownMenuPortal>
-          </DropdownMenuSub>
+          {actionCommands.length > 0 && (
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger>
+                <ActionIcon className="mr-2 h-4 w-4" /> Actions
+              </DropdownMenuSubTrigger>
+              <DropdownMenuPortal>
+                <DropdownMenuSubContent className="z-[10003]">
+                  {renderCommandItems(actionCommands)}
+                </DropdownMenuSubContent>
+              </DropdownMenuPortal>
+            </DropdownMenuSub>
+          )}
 
-          {/* Assertions Sub Menu */}
-          <DropdownMenuSub>
-            <DropdownMenuSubTrigger>
-              <AssertionIcon className="mr-2 h-4 w-4" /> Assertions
-            </DropdownMenuSubTrigger>
-            <DropdownMenuPortal>
-              <DropdownMenuSubContent>
-                <DropdownMenuItem onSelect={() => handleSelect('assertIsVisible')}>
-                  <ViewIcon className="mr-2 h-4 w-4" /> Is Visible
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => handleSelect('assertGetText')}>
-                  <GetTextIcon className="mr-2 h-4 w-4" /> Get Text
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => handleSelect('assertGetAttribute')}>
-                  <GetAttributeIcon className="mr-2 h-4 w-4" /> Get Attribute
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => handleSelect('assertIsEnabled')}>
-                  <IsEnabledIcon className="mr-2 h-4 w-4" /> Is Enabled
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => handleSelect('assertIsExisting')}>
-                  <IsExistingIcon className="mr-2 h-4 w-4" /> Is Existing
-                </DropdownMenuItem>
-                 <DropdownMenuItem onSelect={() => handleSelect('assertGetSize')}>
-                  <GetSizeIcon className="mr-2 h-4 w-4" /> Get Size
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => handleSelect('assertGetLocation')}>
-                  <GetLocationIcon className="mr-2 h-4 w-4" /> Get Location
-                </DropdownMenuItem>
-                {/* Add other assertions like getCSSProperty, isEqual, etc. here */}
-              </DropdownMenuSubContent>
-            </DropdownMenuPortal>
-          </DropdownMenuSub>
-
-          {/* Wait Sub Menu */}
-          <DropdownMenuSub>
-            <DropdownMenuSubTrigger>
-              <WaitIcon className="mr-2 h-4 w-4" /> Wait For
-            </DropdownMenuSubTrigger>
-            <DropdownMenuPortal>
-              <DropdownMenuSubContent>
-                <DropdownMenuItem onSelect={() => handleSelect('waitForVisible')}>
-                  <ViewIcon className="mr-2 h-4 w-4" /> Visible
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => handleSelect('waitForClickable')}>
-                  <ClickIcon className="mr-2 h-4 w-4" /> Clickable
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => handleSelect('waitForEnabled')}>
-                  <IsEnabledIcon className="mr-2 h-4 w-4" /> Enabled
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => handleSelect('waitForExist')}>
-                  <IsExistingIcon className="mr-2 h-4 w-4" /> Exist
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => handleSelect('waitForStable')}>
-                  <PlayIcon className="mr-2 h-4 w-4" /> Stable
-                </DropdownMenuItem>
-                {/* Add other waits like waitUntil etc. here */}
-              </DropdownMenuSubContent>
-            </DropdownMenuPortal>
-          </DropdownMenuSub>
+          {stateAndDataCommands.length > 0 && (
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger>
+                <AssertionIcon className="mr-2 h-4 w-4" /> State & Data
+              </DropdownMenuSubTrigger>
+              <DropdownMenuPortal>
+                <DropdownMenuSubContent className="z-[10003]">
+                  {renderCommandItems(stateAndDataCommands)}
+                </DropdownMenuSubContent>
+              </DropdownMenuPortal>
+            </DropdownMenuSub>
+          )}
+          
+          {waitCommands.length > 0 && (
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger>
+                <WaitIcon className="mr-2 h-4 w-4" /> Wait For
+              </DropdownMenuSubTrigger>
+              <DropdownMenuPortal>
+                <DropdownMenuSubContent className="z-[10003]">
+                  {renderCommandItems(waitCommands)}
+                </DropdownMenuSubContent>
+              </DropdownMenuPortal>
+            </DropdownMenuSub>
+          )}
 
         </DropdownMenuContent>
       </DropdownMenuPortal>
     </DropdownMenu>
   );
 }
+

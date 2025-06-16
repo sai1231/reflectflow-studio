@@ -27,7 +27,7 @@ import {
   Target,
   ChevronRight,
   Watch,
-  CheckCircle2,
+  CheckCircle2 as LucideCheckCircle2,
   PlayCircle,
   X,
   PlusSquare,
@@ -35,15 +35,15 @@ import {
   AtSign,
   ToggleRight,
   WholeWord,
-  ListChecks,
-  Sigma,
+  ListChecks as LucideListChecks,
+  Sigma as LucideSigma,
   Maximize2,
-  Tags,
+  Tags as LucideTags,
   LocateFixed,
-  FileCode,
+  FileCode as LucideFileCode,
   Move,
   Camera,
-  Hand,
+  Hand as LucideHand,
   ListOrdered,
   ALargeSmall,
   Replace,
@@ -54,9 +54,9 @@ import {
   ChevronDown,
   Keyboard,
   HelpCircle,
-  ChevronsUpDown, // For combobox trigger, or isEqual
-  PauseCircle, // For Pause step
-  Bug, // For Debug step
+  ChevronsUpDown,
+  PauseCircle,
+  Bug,
 } from 'lucide-react';
 
 export const RecordIcon = CircleDot;
@@ -85,7 +85,7 @@ export const WarningIcon = AlertTriangle;
 export const TargetIcon = Target;
 export const SubMenuArrowIcon = ChevronRight;
 export const WaitIcon = Watch;
-export const AssertionIcon = ListChecks;
+export const AssertionIcon = LucideListChecks;
 export const ActionIcon = PlayCircle;
 
 export const XIcon = X;
@@ -95,21 +95,22 @@ export const AddValueIcon = PlusSquare;
 export const ClearValueIcon = Eraser;
 export const GetAttributeIcon = AtSign;
 export const IsEnabledIcon = ToggleRight;
-export const IsExistingIcon = CheckCircle2;
+export const IsExistingIcon = LucideCheckCircle2;
+export const CheckCircle2 = LucideCheckCircle2;
 export const GetTextIcon = WholeWord;
-export const GetPropertyIcon = Sigma;
+export const GetPropertyIcon = LucideSigma;
 export const GetSizeIcon = Maximize2;
-export const GetTagNameIcon = Tags;
+export const GetTagNameIcon = LucideTags;
 export const GetLocationIcon = LocateFixed;
-export const GetHtmlIcon = FileCode;
+export const GetHtmlIcon = LucideFileCode;
 export const MoveToIcon = Move;
 export const SaveScreenshotIcon = Camera;
-export const TouchActionIcon = Hand;
+export const TouchActionIcon = LucideHand;
 export const SelectByIndexIcon = ListOrdered;
 export const SelectByTextIcon = ALargeSmall;
 export const SetValueIcon = Replace;
 export const ExecuteScriptIcon = Sparkles;
-export const DoubleClickIcon = MousePointer2; // Can be same as ClickIcon or a variant
+export const DoubleClickIcon = MousePointer2;
 
 export const KeyboardIcon = Keyboard;
 
@@ -121,12 +122,15 @@ export const ChevronDownIcon = ChevronDown;
 
 export const HelpCircleIcon = HelpCircle;
 
-// New Icons from latest request
-export const FileCodeIcon = FileCode; // For ExecuteScriptStep
-export const ChevronsUpDownIcon = ChevronsUpDown; // For Combobox and potentially IsEqualStep
-export const PauseCircleIcon = PauseCircle; // For PauseStep
-export const BugIcon = Bug; // For DebugStep
-export const ListChecksIcon = ListChecks; // For SelectOptionStep (re-using existing)
-export const HandIcon = Hand; // For DragAndDropStep & TouchActionStep (re-using existing)
-export const WatchIcon = Watch; // For WaitUntilStep (re-using existing AssertIcon for waitForElement)
+// New Icons from latest request / existing
+export const FileCodeIcon = LucideFileCode;
+export const ChevronsUpDownIcon = ChevronsUpDown;
+export const PauseCircleIcon = PauseCircle;
+export const BugIcon = Bug;
+export const ListChecksIcon = LucideListChecks;
+export const HandIcon = LucideHand;
+export const WatchIcon = Watch;
+export const Sigma = LucideSigma;
+export const TagsIcon = LucideTags; // Added this export
+
 
