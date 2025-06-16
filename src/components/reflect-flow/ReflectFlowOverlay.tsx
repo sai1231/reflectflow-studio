@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useCallback, useEffect, useRef } from 'react';
-import type { Step, StepType, NavigateStep, ClickStep, TypeStep, ScrollStep, WaitForElementStep, KeyDownStep, KeyUpStep, DoubleClickStep, MoveToStep } from '@/types';
+import type { Step, StepType, NavigateStep, ClickStep, TypeStep, ScrollStep, WaitForElementStep, KeyDownStep, KeyUpStep, DoubleClickStep, MoveToStep, UndeterminedStep } from '@/types';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { HeaderControls } from './HeaderControls';
@@ -10,14 +10,7 @@ import { StepList } from './StepList';
 import { ElementHoverPopup } from './ElementHoverPopup';
 import { HighlightOverlay } from './HighlightOverlay';
 import { useToast } from '@/hooks/use-toast';
-import { PlayIcon, CheckboxSquareIcon, CheckboxUncheckedIcon, FileIcon, TargetIcon, AddIcon, NavigateIcon, ClickIcon as ClickActionIcon, TypeActionIcon as TypeActionIconLucide, ScrollIcon as ScrollActionIcon, AssertIcon as WaitActionIcon, KeyboardIcon as KeyActionIcon, MoveToIcon as MoveActionIcon } from './icons'; // Added AddIcon and specific action icons
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-
+import { PlayIcon, CheckboxSquareIcon, CheckboxUncheckedIcon, FileIcon, TargetIcon, AddIcon } from './icons';
 
 interface ElementDetails {
   element: HTMLElement;
@@ -100,6 +93,7 @@ export function ReflectFlowOverlay() {
   const [panelPosition, setPanelPosition] = useState<{ top: number; left: number }>({ top: PANEL_MIN_TOP, left: -9999 }); // Initialize off-screen
   const [isDragging, setIsDragging] = useState(false);
   const [dragStartOffset, setDragStartOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [newlyAddedStepId, setNewlyAddedStepId] = useState<string | null>(null);
 
   // Refs for drag handlers to ensure they use the latest state
   const isDraggingRef = useRef(isDragging);
@@ -168,7 +162,7 @@ export function ReflectFlowOverlay() {
   }, [handleMouseMoveDraggable]);
 
   const handleMouseDownDraggable = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
-    if ((event.target as HTMLElement).closest('button, input, [role="button"], [role="menuitem"], [role="option"]')) {
+    if ((event.target as HTMLElement).closest('button, input, [role="button"], [role="menuitem"], [role="option"], [data-command-input="true"], [data-command-item="true"]')) {
         return;
     }
     event.preventDefault();
@@ -497,73 +491,26 @@ export function ReflectFlowOverlay() {
     if (newStep) {
       setRecordedSteps(prev => [...prev, newStep]);
       toast({ title: "Step Added", description: toastMessage });
+      setNewlyAddedStepId(newStep.id); // Track newly added step for auto-expansion
     }
     closeElementContextMenu(); 
   }, [toast, closeElementContextMenu]);
 
-  const handleAddStep = useCallback((stepType: StepType) => {
+  const handleAddStep = useCallback(() => {
     const baseId = String(Date.now()) + Math.random().toString(36).substring(2, 7);
-    let newStep: Step;
-    const commonFields = {
+    const newStep: UndeterminedStep = {
         id: baseId,
-        description: `New ${stepType} step`,
+        type: 'undetermined',
+        description: '', // Empty, to be filled by command selection
         target: 'main',
         timeout: 5000,
+        selectors: [''],
+        selector: ''
     };
-    const commonSelectorFields = {
-        ...commonFields,
-        selectors: [''], 
-        selector: '',    
-    };
-
-    switch (stepType) {
-        case 'navigate':
-            newStep = { ...commonFields, type: 'navigate', url: 'https://', selectors: undefined, selector: undefined } as NavigateStep;
-            break;
-        case 'click':
-            newStep = { ...commonSelectorFields, type: 'click' } as ClickStep;
-            break;
-        case 'doubleClick':
-            newStep = { ...commonSelectorFields, type: 'doubleClick' } as DoubleClickStep;
-            break;
-        case 'type':
-            newStep = { ...commonSelectorFields, type: 'type', value: '' } as TypeStep;
-            break;
-        case 'keyDown':
-            newStep = { ...commonFields, type: 'keyDown', key: 'Enter', selectors: undefined, selector: undefined } as KeyDownStep;
-            break;
-        case 'keyUp':
-            newStep = { ...commonFields, type: 'keyUp', key: 'Enter', selectors: undefined, selector: undefined } as KeyUpStep;
-            break;
-        case 'scroll':
-            newStep = { ...commonFields, type: 'scroll', x: 0, y: 0, selectors: ['document'], selector: 'document' } as ScrollStep; // default to document scroll
-            break;
-        case 'waitForElement':
-            newStep = { ...commonSelectorFields, type: 'waitForElement', property: 'visible', operator: '==', expectedValue: true } as WaitForElementStep;
-            break;
-        case 'moveTo':
-            newStep = { ...commonSelectorFields, type: 'moveTo' } as MoveToStep;
-            break;
-        default:
-            toast({ title: "Error", description: `Unknown step type: ${stepType}`, variant: "destructive" });
-            return;
-    }
-
     setRecordedSteps(prev => [...prev, newStep]);
-    toast({ title: "Step Added", description: `New ${stepType} step added. Expand to edit.` });
+    setNewlyAddedStepId(newStep.id); // For auto-expansion
+    toast({ title: "New Step Added", description: "Choose a command for the new step." });
   }, [toast]);
-
-  const stepTypesForMenu: { type: StepType, label: string, icon: React.ElementType }[] = [
-    { type: 'navigate', label: 'Navigate', icon: NavigateIcon },
-    { type: 'click', label: 'Click', icon: ClickActionIcon },
-    { type: 'doubleClick', label: 'Double Click', icon: ClickActionIcon }, // Using ClickActionIcon for Double Click as well
-    { type: 'type', label: 'Type Text', icon: TypeActionIconLucide },
-    { type: 'keyDown', label: 'Key Down', icon: KeyActionIcon },
-    { type: 'keyUp', label: 'Key Up', icon: KeyActionIcon },
-    { type: 'scroll', label: 'Scroll', icon: ScrollActionIcon },
-    { type: 'waitForElement', label: 'Wait For / Assert', icon: WaitActionIcon },
-    { type: 'moveTo', label: 'Move To', icon: MoveActionIcon },
-  ];
 
 
   const handleSaveSession = useCallback(() => {
@@ -600,8 +547,13 @@ export function ReflectFlowOverlay() {
 
   const handleUpdateStep = useCallback((updatedStep: Step) => {
     setRecordedSteps(prev => prev.map(s => s.id === updatedStep.id ? updatedStep : s));
-    toast({ title: "Step Updated", description: `Step "${updatedStep.description}" has been saved.` });
-  }, [toast]);
+    if (updatedStep.type !== 'undetermined') {
+        toast({ title: "Step Updated", description: `Step "${updatedStep.description}" has been configured.` });
+    }
+    if (newlyAddedStepId === updatedStep.id && updatedStep.type !== 'undetermined') {
+        setNewlyAddedStepId(null); // Clear after determination
+    }
+  }, [toast, newlyAddedStepId]);
 
   const handleDeleteStep = useCallback((id: string) => {
     setRecordedSteps(prev => prev.filter(s => s.id !== id));
@@ -667,26 +619,16 @@ export function ReflectFlowOverlay() {
                   onSelectStep={handleSelectStep}
                   onUpdateStep={handleUpdateStep}
                   onDeleteStep={handleDeleteStep}
+                  newlyAddedStepId={newlyAddedStepId}
+                  onStepDetermined={() => newlyAddedStepId ? setNewlyAddedStepId(null) : undefined}
                 />
               </div>
             </CardContent>
             <CardFooter className="p-3 border-t flex flex-col items-start space-y-2">
                 <div className="flex justify-between w-full items-center">
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="outline" size="sm">
-                        <AddIcon className="mr-2 h-4 w-4" /> Add Step
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="start">
-                      {stepTypesForMenu.map(stepMeta => (
-                        <DropdownMenuItem key={stepMeta.type} onSelect={() => handleAddStep(stepMeta.type)}>
-                          <stepMeta.icon className="mr-2 h-4 w-4" />
-                          {stepMeta.label}
-                        </DropdownMenuItem>
-                      ))}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                  <Button onClick={handleAddStep} variant="outline" size="sm">
+                    <AddIcon className="mr-2 h-4 w-4" /> Add Step
+                  </Button>
 
                   {recordedSteps.length > 0 && (
                     <div className="flex items-center space-x-2">
@@ -745,4 +687,3 @@ export function ReflectFlowOverlay() {
     </div>
   );
 }
-

@@ -53,23 +53,24 @@ import {
   ChevronUp,
   ChevronDown,
   Keyboard, // For KeyDown/KeyUp
+  HelpCircle, // For undetermined steps
 } from 'lucide-react';
 
 export const RecordIcon = CircleDot;
 export const PauseIcon = Pause;
 export const PlayIcon = Play;
-export const EditIcon = Edit3; // Kept for potential future use, but StepItem is always editable now
+export const EditIcon = Edit3; 
 export const DeleteIcon = Trash2;
 export const ClickIcon = MousePointer2;
 export const TypeActionIcon = TypeIconLucide;
 export const NavigateIcon = Navigation;
 export const ScrollIcon = ArrowDownUp;
-export const SubmitIcon = Send; // Might not be used directly if mapping to click
-export const AssertIcon = ShieldCheck; // General for waitForElement/assertions
+export const SubmitIcon = Send; 
+export const AssertIcon = ShieldCheck; 
 export const SaveIcon = Save;
 export const CheckboxSquareIcon = LucideCheckSquare;
 export const CheckboxUncheckedIcon = Square;
-export const AddIcon = PlusCircle; // Generic add
+export const AddIcon = PlusCircle; 
 export const DragHandleIcon = GripVertical;
 export const SettingsIcon = Settings2;
 export const ViewIcon = Eye;
@@ -81,8 +82,8 @@ export const WarningIcon = AlertTriangle;
 export const TargetIcon = Target;
 export const SubMenuArrowIcon = ChevronRight;
 export const WaitIcon = Watch;
-export const AssertionIcon = ListChecks; // Used in ElementHoverPopup
-export const ActionIcon = PlayCircle; // Used in ElementHoverPopup & StepItem for generic "action" feel
+export const AssertionIcon = ListChecks; 
+export const ActionIcon = PlayCircle; 
 
 export const XIcon = X;
 
@@ -93,24 +94,26 @@ export const GetAttributeIcon = AtSign;
 export const IsEnabledIcon = ToggleRight;
 export const IsExistingIcon = CheckCircle2;
 export const GetTextIcon = WholeWord;
-export const GetPropertyIcon = Sigma; // For generic property
+export const GetPropertyIcon = Sigma; 
 export const GetSizeIcon = Maximize2;
-export const GetTagNameIcon = Tags; // Not directly in new types, but useful icon
+export const GetTagNameIcon = Tags; 
 export const GetLocationIcon = LocateFixed;
-export const GetHtmlIcon = FileCode; // Not directly in new types
+export const GetHtmlIcon = FileCode; 
 export const MoveToIcon = Move;
-export const SaveScreenshotIcon = Camera; // Not in new types
-export const TouchActionIcon = Hand; // Not in new types
-export const SelectByIndexIcon = ListOrdered; // Not in new types
-export const SelectByTextIcon = ALargeSmall; // Not in new types
-export const SetValueIcon = Replace; // Or TypeActionIcon
-export const ExecuteScriptIcon = Sparkles; // Not in new types
-export const DoubleClickIcon = MousePointer2; // Could make a variant if needed
+export const SaveScreenshotIcon = Camera; 
+export const TouchActionIcon = Hand; 
+export const SelectByIndexIcon = ListOrdered; 
+export const SelectByTextIcon = ALargeSmall; 
+export const SetValueIcon = Replace; 
+export const ExecuteScriptIcon = Sparkles; 
+export const DoubleClickIcon = MousePointer2; 
 
-export const KeyboardIcon = Keyboard; // For KeyDown/KeyUp steps
+export const KeyboardIcon = Keyboard; 
 
 // Panel collapse/expand icons
 export const CollapsePanelIcon = PanelRightClose;
 export const ExpandPanelIcon = PanelLeftOpen;
 export const ChevronUpIcon = ChevronUp;
 export const ChevronDownIcon = ChevronDown;
+
+export const HelpCircleIcon = HelpCircle;

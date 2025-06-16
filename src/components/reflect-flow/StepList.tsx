@@ -1,3 +1,4 @@
+
 "use client";
 
 import type { Step } from '@/types';
@@ -10,9 +11,11 @@ interface StepListProps {
   onSelectStep: (id: string, selected: boolean) => void;
   onUpdateStep: (step: Step) => void;
   onDeleteStep: (id: string) => void;
+  newlyAddedStepId: string | null;
+  onStepDetermined: (id: string) => void;
 }
 
-export function StepList({ steps, selectedSteps, onSelectStep, onUpdateStep, onDeleteStep }: StepListProps) {
+export function StepList({ steps, selectedSteps, onSelectStep, onUpdateStep, onDeleteStep, newlyAddedStepId, onStepDetermined }: StepListProps) {
   if (steps.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-muted-foreground p-8">
@@ -24,13 +27,13 @@ export function StepList({ steps, selectedSteps, onSelectStep, onUpdateStep, onD
           <path d="M9.5 14.5L12 12"></path>
         </svg>
         <p className="text-center">No steps recorded yet.</p>
-        <p className="text-center text-sm">Click "Record" to begin.</p>
+        <p className="text-center text-sm">Click "Record" or "Add Step" to begin.</p>
       </div>
     );
   }
 
   return (
-    <ScrollArea className="h-[calc(100%-4rem)] flex-grow"> {/* Adjust height as needed */}
+    <ScrollArea className="h-[calc(100%-0rem)] flex-grow"> {/* Adjusted height if footer is always there */}
       <div className="p-1 space-y-1">
         {steps.map((step, index) => (
           <StepItem
@@ -40,6 +43,8 @@ export function StepList({ steps, selectedSteps, onSelectStep, onUpdateStep, onD
             onSelect={onSelectStep}
             onUpdateStep={onUpdateStep}
             onDeleteStep={onDeleteStep}
+            initialExpanded={step.id === newlyAddedStepId || step.type === 'undetermined'}
+            onCommandSelected={() => onStepDetermined(step.id)}
           />
         ))}
       </div>
