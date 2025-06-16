@@ -26,9 +26,10 @@ interface StepListProps {
   newlyAddedStepId: string | null;
   onStepDetermined: (id: string) => void;
   onReorderSteps: (oldIndex: number, newIndex: number) => void;
+  onPickSelectorForStep: (stepId: string) => void;
 }
 
-export function StepList({ steps, onUpdateStep, onDeleteStep, newlyAddedStepId, onStepDetermined, onReorderSteps }: StepListProps) {
+export function StepList({ steps, onUpdateStep, onDeleteStep, newlyAddedStepId, onStepDetermined, onReorderSteps, onPickSelectorForStep }: StepListProps) {
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, {
@@ -83,6 +84,7 @@ export function StepList({ steps, onUpdateStep, onDeleteStep, newlyAddedStepId, 
                 onDeleteStep={onDeleteStep}
                 initialExpanded={step.id === newlyAddedStepId || step.type === 'undetermined'}
                 onCommandSelected={() => onStepDetermined(step.id)}
+                onPickSelectorForStep={onPickSelectorForStep}
               />
             ))}
           </div>
@@ -91,7 +93,3 @@ export function StepList({ steps, onUpdateStep, onDeleteStep, newlyAddedStepId, 
     </DndContext>
   );
 }
-
-    
-
-

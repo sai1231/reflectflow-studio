@@ -151,6 +151,7 @@ export function ReflectFlowOverlay() {
   const [isRecording, setIsRecording] = useState(false);
   const [recordedSteps, setRecordedSteps] = useState<Step[]>([]);
   const [isElementSelectorActive, setIsElementSelectorActive] = useState(false);
+  const [pickingSelectorForStepId, setPickingSelectorForStepId] = useState<string | null>(null);
 
   const [highlightedElementDetails, setHighlightedElementDetails] = useState<ElementDetails | null>(null);
   const [inspectIconTarget, setInspectIconTarget] = useState<HTMLElement | null>(null);
@@ -272,6 +273,7 @@ export function ReflectFlowOverlay() {
     setIsRecording(newIsRecording);
     if (newIsRecording) {
       setIsElementSelectorActive(false);
+      setPickingSelectorForStepId(null);
       setIsElementContextMenuOpen(false);
       setInspectIconTarget(null);
       setHighlightedElementDetails(null);
@@ -349,7 +351,7 @@ export function ReflectFlowOverlay() {
   }, [addNewStep]);
 
   const recordClick = useCallback((event: MouseEvent) => {
-    if (isElementSelectorActive || !isRecording || isElementContextMenuOpen) return;
+    if (isElementSelectorActive || !isRecording || isElementContextMenuOpen || pickingSelectorForStepId) return;
     if (panelCardRef.current && panelCardRef.current.contains(event.target as Node)) return;
 
     const target = event.target as HTMLElement;
@@ -383,20 +385,20 @@ export function ReflectFlowOverlay() {
     setRecordedSteps(prevSteps => [...prevSteps, newStep]);
     toast({ title: "Action Recorded", description: `Recorded: Click on ${elementInfo.generatedSelectors[0] || 'N/A'}` });
     checkUrlChangeAfterDelay();
-  }, [isElementSelectorActive, isRecording, isElementContextMenuOpen, checkUrlChangeAfterDelay, toast]);
+  }, [isElementSelectorActive, isRecording, isElementContextMenuOpen, checkUrlChangeAfterDelay, toast, pickingSelectorForStepId]);
 
 
   const handleFocusIn = useCallback((event: FocusEvent) => {
-    if (!isRecording) return;
+    if (!isRecording || pickingSelectorForStepId) return;
     if (panelCardRef.current && panelCardRef.current.contains(event.target as Node)) return;
     const target = event.target as HTMLElement;
     if (target.matches('input[type="text"], input[type="password"], input[type="email"], input[type="search"], input[type="url"], input[type="tel"], input[type="number"], textarea')) {
         setFocusedElementInfo({ element: target, initialValue: (target as HTMLInputElement | HTMLTextAreaElement).value });
     }
-  }, [isRecording]);
+  }, [isRecording, pickingSelectorForStepId]);
 
   const handleFocusOut = useCallback((event: FocusEvent) => {
-    if (!isRecording) return;
+    if (!isRecording || pickingSelectorForStepId) return;
     if (panelCardRef.current && panelCardRef.current.contains(event.target as Node)) return;
     if (focusedElementInfo && event.target === focusedElementInfo.element) {
         const currentValue = (focusedElementInfo.element as HTMLInputElement | HTMLTextAreaElement).value;
@@ -405,10 +407,10 @@ export function ReflectFlowOverlay() {
         }
         setFocusedElementInfo(null);
     }
-  }, [isRecording, focusedElementInfo, addNewStep]);
+  }, [isRecording, focusedElementInfo, addNewStep, pickingSelectorForStepId]);
 
   const handleChangeEvent = useCallback((event: Event) => {
-    if (!isRecording) return;
+    if (!isRecording || pickingSelectorForStepId) return;
     if (panelCardRef.current && panelCardRef.current.contains(event.target as Node)) return;
     const target = event.target as HTMLSelectElement;
     if (target.tagName === 'SELECT') {
@@ -417,10 +419,10 @@ export function ReflectFlowOverlay() {
             addNewStep('selectByVisibleText', target, { visibleText: selectedOption.text });
         }
     }
-  }, [isRecording, addNewStep]);
+  }, [isRecording, addNewStep, pickingSelectorForStepId]);
 
   const handleGeneralKeyDown = useCallback((event: KeyboardEvent) => {
-    if (!isRecording) return;
+    if (!isRecording || pickingSelectorForStepId) return;
     const activeElement = document.activeElement as HTMLElement;
     if (panelCardRef.current && panelCardRef.current.contains(activeElement)) return;
 
@@ -433,19 +435,19 @@ export function ReflectFlowOverlay() {
     if (['Enter', 'Tab', 'Escape'].includes(event.key)) {
         addNewStep('keyDown', document.activeElement instanceof HTMLElement ? document.activeElement : null, { key: event.key });
     }
-  }, [isRecording, addNewStep]);
+  }, [isRecording, addNewStep, pickingSelectorForStepId]);
 
   const handlePopState = useCallback(() => {
-    if (!isRecording) return;
+    if (!isRecording || pickingSelectorForStepId) return;
     if (typeof window !== 'undefined' && window.location.href !== previousUrlRef.current) {
         addNewStep('navigate', null, { url: window.location.href });
         previousUrlRef.current = window.location.href;
     }
-  }, [isRecording, addNewStep]);
+  }, [isRecording, addNewStep, pickingSelectorForStepId]);
 
 
   useEffect(() => {
-    const shouldListen = isRecording && !isElementSelectorActive && !isElementContextMenuOpen;
+    const shouldListen = isRecording && !isElementSelectorActive && !isElementContextMenuOpen && !pickingSelectorForStepId;
     if (shouldListen) {
         document.addEventListener('click', recordClick, true);
         document.addEventListener('focusin', handleFocusIn, true);
@@ -472,11 +474,13 @@ export function ReflectFlowOverlay() {
         document.removeEventListener('keydown', handleGeneralKeyDown, true);
         window.removeEventListener('popstate', handlePopState);
     };
-  }, [isRecording, recordClick, handleFocusIn, handleFocusOut, handleChangeEvent, handleGeneralKeyDown, handlePopState, isElementSelectorActive, isElementContextMenuOpen]);
+  }, [isRecording, recordClick, handleFocusIn, handleFocusOut, handleChangeEvent, handleGeneralKeyDown, handlePopState, isElementSelectorActive, isElementContextMenuOpen, pickingSelectorForStepId]);
 
 
-  const handleMouseOver = useCallback((event: MouseEvent) => {
-    if (!isElementSelectorActive || isElementContextMenuOpen || isDraggingRef.current) return;
+  const handleMouseOverForSelectorModes = useCallback((event: MouseEvent) => {
+    // This function now serves both ElementSelectorActive and PickingSelectorForStepId modes for highlighting
+    if ((!isElementSelectorActive && !pickingSelectorForStepId) || isElementContextMenuOpen || isDraggingRef.current) return;
+    
     const target = event.target as HTMLElement;
 
     if (target.matches('[data-reflectflow-icon="true"]')) {
@@ -501,23 +505,36 @@ export function ReflectFlowOverlay() {
       clearTimeout(hoverTimerRef.current);
     }
 
+    // Delay highlighting slightly
     hoverTimerRef.current = setTimeout(() => {
       setHighlightedElementDetails({ element: target, info: generateElementInfo(target) });
-      setInspectIconTarget(target);
-    }, 500);
-  }, [isElementSelectorActive, isElementContextMenuOpen]);
+      if (isElementSelectorActive && !pickingSelectorForStepId) { // Only show inspect icon in general selector mode
+        setInspectIconTarget(target);
+      } else {
+        setInspectIconTarget(null); // No icon when picking for a step
+      }
+    }, pickingSelectorForStepId ? 50 : 500); // Shorter delay if just picking for step
+  }, [isElementSelectorActive, pickingSelectorForStepId, isElementContextMenuOpen]);
 
-  const handleMouseOut = useCallback(() => {
-    if (!isElementSelectorActive || isElementContextMenuOpen || isDraggingRef.current) return;
+
+  const handleMouseOutForSelectorModes = useCallback(() => {
+     if ((!isElementSelectorActive && !pickingSelectorForStepId) || isElementContextMenuOpen || isDraggingRef.current) return;
     if (hoverTimerRef.current) {
       clearTimeout(hoverTimerRef.current);
       hoverTimerRef.current = null;
     }
-  }, [isElementSelectorActive, isElementContextMenuOpen]);
+    // Do not clear highlight immediately on mouseout if picking, only if timer was cleared
+    if (!pickingSelectorForStepId) {
+       // setHighlightedElementDetails(null); 
+       // setInspectIconTarget(null);
+    }
+  }, [isElementSelectorActive, pickingSelectorForStepId, isElementContextMenuOpen]);
 
 
   const handleInspectIconClick = useCallback((event: React.MouseEvent, pageElement: HTMLElement) => {
     event.stopPropagation();
+    if (pickingSelectorForStepId) return; // Do not open context menu if picking for step
+
     const elementInfoForMenu = highlightedElementDetails && highlightedElementDetails.element === pageElement
       ? highlightedElementDetails.info
       : generateElementInfo(pageElement);
@@ -528,40 +545,51 @@ export function ReflectFlowOverlay() {
     setIsElementContextMenuOpen(true);
     setInspectIconTarget(null);
     setHighlightedElementDetails(null);
-  }, [highlightedElementDetails]);
+  }, [highlightedElementDetails, pickingSelectorForStepId]);
 
   const closeElementContextMenu = useCallback(() => {
     setIsElementContextMenuOpen(false);
     setCurrentContextMenuElementInfo(null);
-    setHighlightedElementDetails(null);
-    setInspectIconTarget(null);
-  }, []);
+    // Do not clear highlight or inspect target if element selector is still active generally
+    if (!isElementSelectorActive) {
+        setHighlightedElementDetails(null);
+        setInspectIconTarget(null);
+    }
+  }, [isElementSelectorActive]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
-        if (isElementContextMenuOpen) {
+        if (pickingSelectorForStepId) {
+          setPickingSelectorForStepId(null);
+          toast({ title: "Selector Picking Cancelled", description: "Pressed ESC key."});
+          setHighlightedElementDetails(null);
+        } else if (isElementContextMenuOpen) {
           closeElementContextMenu();
         } else if (isElementSelectorActive) {
           setIsElementSelectorActive(false);
           toast({ title: "Element Selector Deactivated", description: "Pressed ESC key."});
+          setHighlightedElementDetails(null);
+          setInspectIconTarget(null);
         }
       }
     };
 
-    if (isElementSelectorActive) {
+    const isAnySelectorModeActive = isElementSelectorActive || !!pickingSelectorForStepId;
+
+    if (isAnySelectorModeActive) {
       document.addEventListener('keydown', handleKeyDown);
-      if (!isElementContextMenuOpen) {
-        document.addEventListener('mouseover', handleMouseOver);
-        document.addEventListener('mouseout', handleMouseOut);
+      if (!isElementContextMenuOpen) { // Context menu takes precedence for mouse events if open
+        document.addEventListener('mouseover', handleMouseOverForSelectorModes);
+        document.addEventListener('mouseout', handleMouseOutForSelectorModes);
       } else {
-        document.removeEventListener('mouseover', handleMouseOver);
-        document.removeEventListener('mouseout', handleMouseOut);
+        document.removeEventListener('mouseover', handleMouseOverForSelectorModes);
+        document.removeEventListener('mouseout', handleMouseOutForSelectorModes);
         if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
       }
     } else {
-      document.removeEventListener('mouseover', handleMouseOver);
-      document.removeEventListener('mouseout', handleMouseOut);
+      document.removeEventListener('mouseover', handleMouseOverForSelectorModes);
+      document.removeEventListener('mouseout', handleMouseOutForSelectorModes);
       document.removeEventListener('keydown', handleKeyDown);
       if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
       setHighlightedElementDetails(null);
@@ -571,18 +599,64 @@ export function ReflectFlowOverlay() {
     }
 
     return () => {
-      document.removeEventListener('mouseover', handleMouseOver);
-      document.removeEventListener('mouseout', handleMouseOut);
+      document.removeEventListener('mouseover', handleMouseOverForSelectorModes);
+      document.removeEventListener('mouseout', handleMouseOutForSelectorModes);
       document.removeEventListener('keydown', handleKeyDown);
       if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
     };
-  }, [isElementSelectorActive, isElementContextMenuOpen, handleMouseOver, handleMouseOut, toast, closeElementContextMenu]);
+  }, [isElementSelectorActive, pickingSelectorForStepId, isElementContextMenuOpen, handleMouseOverForSelectorModes, handleMouseOutForSelectorModes, toast, closeElementContextMenu]);
+
+
+  // Effect for handling clicks when pickingSelectorForStepId is active
+  useEffect(() => {
+    if (!pickingSelectorForStepId) return;
+
+    const handleElementSelectionForStep = (event: MouseEvent) => {
+      if (panelCardRef.current && panelCardRef.current.contains(event.target as Node)) {
+        return; // Click was inside the panel
+      }
+      
+      event.preventDefault();
+      event.stopPropagation();
+
+      const targetElement = event.target as HTMLElement;
+      if (!targetElement || !targetElement.tagName || targetElement === document.body || targetElement === document.documentElement) {
+        toast({ title: "Invalid Target", description: "Please click a more specific element.", variant: "destructive" });
+        return;
+      }
+
+      const elementInfo = generateElementInfo(targetElement);
+      const stepToUpdate = recordedSteps.find(s => s.id === pickingSelectorForStepId);
+
+      setRecordedSteps(prevSteps => prevSteps.map(s => {
+        if (s.id === pickingSelectorForStepId) {
+          toast({ title: "Selectors Set", description: `Selectors for step "${s.badgeLabel || s.description}" updated.` });
+          return {
+            ...s,
+            selectors: elementInfo.generatedSelectors,
+            selector: elementInfo.generatedSelectors[0] || '',
+          };
+        }
+        return s;
+      }));
+      setPickingSelectorForStepId(null);
+      setHighlightedElementDetails(null); 
+    };
+
+    document.addEventListener('click', handleElementSelectionForStep, true); // Use capture phase
+    return () => {
+      document.removeEventListener('click', handleElementSelectionForStep, true);
+    };
+  }, [pickingSelectorForStepId, recordedSteps, toast]);
+
+
 
   const handleToggleElementSelector = useCallback(() => {
     const newIsActive = !isElementSelectorActive;
     setIsElementSelectorActive(newIsActive);
     if (newIsActive) {
       setIsRecording(false);
+      setPickingSelectorForStepId(null); // Ensure picking mode is off
       setHighlightedElementDetails(null);
       setInspectIconTarget(null);
       setIsElementContextMenuOpen(false);
@@ -601,6 +675,18 @@ export function ReflectFlowOverlay() {
       });
     }
   }, [isElementSelectorActive, toast]);
+
+
+  const handleInitiateSelectorPick = useCallback((stepId: string) => {
+    setPickingSelectorForStepId(stepId);
+    setIsRecording(false);
+    setIsElementSelectorActive(false); // Turn off general element selector mode
+    closeElementContextMenu(); // Close any open context menus
+    setHighlightedElementDetails(null); // Clear any existing highlight
+    setInspectIconTarget(null);
+    toast({ title: "Pick an Element", description: "Click an element on the page to set its selectors for the step." });
+  }, [toast, closeElementContextMenu]);
+
 
   const handleCommandSelectedFromInspector = useCallback((commandKey: string, targetElementInfo: ElementInfoForPopup) => {
     const commandInfo = findCommandByKey(commandKey);
@@ -814,6 +900,7 @@ export function ReflectFlowOverlay() {
                 newlyAddedStepId={newlyAddedStepId}
                 onStepDetermined={() => newlyAddedStepId ? setNewlyAddedStepId(null) : undefined}
                 onReorderSteps={handleReorderSteps}
+                onPickSelectorForStep={handleInitiateSelectorPick}
               />
             </CardContent>
             <CardFooter className="p-3 border-t flex flex-col items-start space-y-2">
@@ -827,7 +914,8 @@ export function ReflectFlowOverlay() {
         )}
       </Card>
 
-      {isElementSelectorActive && inspectIconTarget && !isElementContextMenuOpen && !isDragging && typeof window !== 'undefined' && (() => {
+      {/* Show TargetIcon for general element selection mode, but not when picking for a specific step */}
+      {isElementSelectorActive && !pickingSelectorForStepId && inspectIconTarget && !isElementContextMenuOpen && !isDragging && typeof window !== 'undefined' && (() => {
           const rect = inspectIconTarget.getBoundingClientRect();
           const iconSize = 32;
           let iconTop = rect.top + rect.height / 2 - iconSize / 2;
@@ -856,15 +944,14 @@ export function ReflectFlowOverlay() {
 
       <ElementHoverPopup
         elementInfo={currentContextMenuElementInfo}
-        isOpen={isElementContextMenuOpen && !!currentContextMenuElementInfo && !isDragging}
+        isOpen={isElementContextMenuOpen && !!currentContextMenuElementInfo && !isDragging && !pickingSelectorForStepId}
         onCommandSelected={handleCommandSelectedFromInspector}
         position={contextMenuPosition}
         onClose={closeElementContextMenu}
       />
 
-      <HighlightOverlay targetElement={isElementSelectorActive && !isDragging ? (highlightedElementDetails?.element ?? null) : null} />
+      {/* Highlight overlay active in general element selector mode OR when picking selector for a step */}
+      <HighlightOverlay targetElement={(isElementSelectorActive || !!pickingSelectorForStepId) && !isDragging ? (highlightedElementDetails?.element ?? null) : null} />
     </div>
   );
 }
-
-    

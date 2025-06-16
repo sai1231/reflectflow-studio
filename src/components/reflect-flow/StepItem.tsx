@@ -43,6 +43,7 @@ import {
   ChevronsUpDownIcon, 
   ListChecksIcon, 
   WatchIcon, 
+  TargetIcon,
 } from './icons';
 import {
   DropdownMenu,
@@ -57,6 +58,7 @@ interface StepItemProps {
   onUpdateStep: (step: Step) => void;
   onDeleteStep: (id:string) => void;
   onCommandSelected: (stepId: string) => void;
+  onPickSelectorForStep: (stepId: string) => void;
 }
 
 const getIconForStep = (type: StepType, commandKey?: string): React.ElementType => {
@@ -123,7 +125,7 @@ const parseParamDefinition = (def: string, isOptional: boolean): ParamDefinition
 };
 
 
-export function StepItem({ step, initialExpanded = false, onUpdateStep, onDeleteStep, onCommandSelected }: StepItemProps) {
+export function StepItem({ step, initialExpanded = false, onUpdateStep, onDeleteStep, onCommandSelected, onPickSelectorForStep }: StepItemProps) {
   const [editableStep, setEditableStep] = useState<Step>(() => JSON.parse(JSON.stringify(step)));
   const [isExpanded, setIsExpanded] = useState(initialExpanded || step.type === 'undetermined');
   const [commandSearch, setCommandSearch] = useState('');
@@ -489,49 +491,77 @@ export function StepItem({ step, initialExpanded = false, onUpdateStep, onDelete
      </div>
   );
 
-  const renderEditableFields = () => (
-    <div className="space-y-3 p-3 border-t mt-2 bg-muted/20 rounded-b-md">
-      {renderCommonFields()}
+  const renderEditableFields = () => {
+    const showPickSelectorButton = currentStepCommandInfo?.isElementCommand && 
+                                  (!editableStep.selectors || editableStep.selectors.every(s => !s.trim()));
+    return (
+      <div className="space-y-3 p-3 border-t mt-2 bg-muted/20 rounded-b-md">
+        {renderCommonFields()}
 
-      {currentStepCommandInfo?.isElementCommand && (
-        <>
-          {(editableStep.selectors && editableStep.selectors.length > 0 ? editableStep.selectors : ['']).map((sel, index) => (
-            <div key={index} className="grid grid-cols-3 gap-2 items-center">
-              <Label htmlFor={`selector-${editableStep.id}-${index}`} className="text-xs">{index === 0 ? 'Selector(s)*' : `Alt. Sel. ${index}`}</Label>
-              <div className="col-span-2 flex items-center gap-1">
-                <Input
-                  id={`selector-${editableStep.id}-${index}`}
-                  placeholder={index === 0 ? "Primary Selector (CSS, XPath)" : "Alternative Selector"}
-                  value={sel}
-                  onChange={(e) => handleSelectorChange(index, e.target.value)}
-                  className="text-sm h-8 flex-grow"
-                />
-                {(editableStep.selectors || []).length > 1 && (
-                  <Button type="button" variant="ghost" size="icon" onClick={() => handleRemoveSelector(index)} className="h-7 w-7 p-0 flex-shrink-0" aria-label="Remove selector">
-                    <DeleteIcon className="h-3 w-3" />
-                  </Button>
-                )}
+        {currentStepCommandInfo?.isElementCommand && (
+          <>
+            {(editableStep.selectors && editableStep.selectors.length > 0 && !editableStep.selectors.every(s=>!s.trim()) ? editableStep.selectors : ['']).map((sel, index) => (
+              <div key={index} className="grid grid-cols-3 gap-2 items-center">
+                <Label htmlFor={`selector-${editableStep.id}-${index}`} className="text-xs">
+                  {index === 0 ? 'Selector(s)*' : `Alt. Sel. ${index}`}
+                </Label>
+                <div className="col-span-2 flex items-center gap-1">
+                  <Input
+                    id={`selector-${editableStep.id}-${index}`}
+                    placeholder={showPickSelectorButton && index === 0 ? "Click target icon to pick..." : (index === 0 ? "Primary Selector (CSS, XPath)" : "Alternative Selector")}
+                    value={sel}
+                    onChange={(e) => handleSelectorChange(index, e.target.value)}
+                    className="text-sm h-8 flex-grow"
+                    disabled={showPickSelectorButton && index === 0}
+                  />
+                   {index === 0 && showPickSelectorButton && (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button 
+                          type="button" 
+                          variant="ghost" 
+                          size="icon" 
+                          onClick={() => onPickSelectorForStep(editableStep.id)} 
+                          className="h-7 w-7 p-0 flex-shrink-0" 
+                          aria-label="Pick selector from page"
+                        >
+                          <TargetIcon className="h-4 w-4 text-primary" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Pick selector from page</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  )}
+                  {(editableStep.selectors || []).length > 1 && !showPickSelectorButton && (
+                    <Button type="button" variant="ghost" size="icon" onClick={() => handleRemoveSelector(index)} className="h-7 w-7 p-0 flex-shrink-0" aria-label="Remove selector">
+                      <DeleteIcon className="h-3 w-3" />
+                    </Button>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
-          <div className="grid grid-cols-3 gap-2 items-center">
-            <div></div>
-            <div className="col-span-2">
-              <Button type="button" variant="outline" size="sm" onClick={handleAddSelector} className="h-7 text-xs mt-1 w-full">
-                Add Selector
-              </Button>
-            </div>
-          </div>
-        </>
-      )}
+            ))}
+            {!showPickSelectorButton && (
+              <div className="grid grid-cols-3 gap-2 items-center">
+                <div></div>
+                <div className="col-span-2">
+                  <Button type="button" variant="outline" size="sm" onClick={handleAddSelector} className="h-7 text-xs mt-1 w-full">
+                    Add Selector
+                  </Button>
+                </div>
+              </div>
+            )}
+          </>
+        )}
 
-      {renderDynamicParamInputs()}
+        {renderDynamicParamInputs()}
 
-      <Button onClick={handleSaveChanges} size="sm" variant="default" className="h-8 mt-3 w-full">
-        <SaveIcon className="mr-1 h-3 w-3" /> Apply Changes
-      </Button>
-    </div>
-  );
+        <Button onClick={handleSaveChanges} size="sm" variant="default" className="h-8 mt-3 w-full">
+          <SaveIcon className="mr-1 h-3 w-3" /> Apply Changes
+        </Button>
+      </div>
+    );
+  };
 
 
   return (
@@ -617,5 +647,3 @@ export function StepItem({ step, initialExpanded = false, onUpdateStep, onDelete
     </TooltipProvider>
   );
 }
-
-
