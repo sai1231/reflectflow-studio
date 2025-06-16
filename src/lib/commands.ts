@@ -289,6 +289,15 @@ export const availableCommands: CommandInfo[] = [
     defaultParams: { property: 'stable', operator: 'stable', expectedValue: true }
   },
   {
+    key: 'keyDown',
+    badgeLabel: 'Key Down',
+    description: 'Press a specific key.',
+    requiredParams: ['key: string'],
+    optionalParams: [],
+    mapsToStepType: 'keyDown',
+    isElementCommand: true, 
+  },
+  {
     key: 'moveTo',
     badgeLabel: 'Move To',
     description: 'Move mouse to element center.',
@@ -296,6 +305,15 @@ export const availableCommands: CommandInfo[] = [
     optionalParams: ['xOffset: number', 'yOffset: number'],
     mapsToStepType: 'moveTo',
     isElementCommand: true,
+  },
+  {
+    key: 'navigate',
+    badgeLabel: 'Navigate',
+    description: 'Navigate to a new URL.',
+    requiredParams: ['url: string'],
+    optionalParams: [],
+    mapsToStepType: 'navigate',
+    isElementCommand: false,
   },
   {
     key: 'nextElement',
@@ -316,6 +334,15 @@ export const availableCommands: CommandInfo[] = [
     mapsToStepType: 'waitForElement',
     isElementCommand: true,
     defaultParams: { property: 'existing', operator: 'exists', expectedValue: true, derivedAction: 'parentElement', description: 'Get parent element.' }
+  },
+  {
+    key: 'pause',
+    badgeLabel: 'Pause',
+    description: 'Pause execution for a specified duration.',
+    requiredParams: ['duration: number'],
+    optionalParams: [],
+    mapsToStepType: 'pause',
+    isElementCommand: false,
   },
   {
     key: 'previousElement',
@@ -345,6 +372,16 @@ export const availableCommands: CommandInfo[] = [
     mapsToStepType: 'scroll',
     isElementCommand: true,
     defaultParams: { scrollType: 'element' }
+  },
+  {
+    key: 'scrollWindow',
+    badgeLabel: 'Scroll Window',
+    description: 'Scroll the window to specified coordinates.',
+    requiredParams: ['x: number', 'y: number'],
+    optionalParams: [],
+    mapsToStepType: 'scroll',
+    isElementCommand: false,
+    defaultParams: { scrollType: 'window' }
   },
   {
     key: 'selectByAttribute',
@@ -453,35 +490,6 @@ export const availableCommands: CommandInfo[] = [
     mapsToStepType: 'waitUntil',
     isElementCommand: false,
   },
-  // Adding commands from earlier stage that might be missing in user's current JSON list but are good to have
-  {
-    key: 'navigate',
-    badgeLabel: 'Navigate',
-    description: 'Navigate to a new URL.',
-    requiredParams: ['url: string'],
-    optionalParams: [],
-    mapsToStepType: 'navigate',
-    isElementCommand: false,
-  },
-  {
-    key: 'scrollWindow',
-    badgeLabel: 'Scroll Window',
-    description: 'Scroll the window to specified coordinates.',
-    requiredParams: ['x: number', 'y: number'],
-    optionalParams: [],
-    mapsToStepType: 'scroll',
-    isElementCommand: false,
-    defaultParams: { scrollType: 'window' }
-  },
-   {
-    key: 'pause',
-    badgeLabel: 'Pause',
-    description: 'Pause execution for a specified duration.',
-    requiredParams: ['duration: number'],
-    optionalParams: [],
-    mapsToStepType: 'pause',
-    isElementCommand: false,
-  },
   {
     key: 'debug',
     badgeLabel: 'Debug',
@@ -496,5 +504,3 @@ export const availableCommands: CommandInfo[] = [
 export const findCommandByKey = (key: string): CommandInfo | undefined => {
   return availableCommands.find(cmd => cmd.key === key);
 };
-
-    

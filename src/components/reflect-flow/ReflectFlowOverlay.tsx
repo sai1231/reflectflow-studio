@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useCallback, useEffect, useRef } from 'react';
-import type { Step, UndeterminedStep, RecordingSession, ClickStep, ElementInfoForPopup } from '@/types';
+import type { Step, UndeterminedStep, RecordingSession, ElementInfoForPopup, ClickStep } from '@/types';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { HeaderControls } from './HeaderControls';
@@ -11,7 +11,7 @@ import { ElementHoverPopup } from './ElementHoverPopup';
 import { HighlightOverlay } from './HighlightOverlay';
 import { useToast } from '@/hooks/use-toast';
 import { FileIcon, TargetIcon, AddIcon } from './icons';
-import { CommandInfo, findCommandByKey } from '@/lib/commands';
+import { CommandInfo, findCommandByKey, availableCommands } from '@/lib/commands';
 import { arrayMove } from '@dnd-kit/sortable';
 
 
@@ -22,7 +22,7 @@ interface ElementDetails {
 
 
 const PANEL_WIDTH_EXPANDED = 400;
-const PANEL_WIDTH_COLLAPSED = 160; 
+const PANEL_WIDTH_COLLAPSED = 160;
 const PANEL_MIN_LEFT = 16;
 const PANEL_MIN_TOP = 16;
 
@@ -86,7 +86,7 @@ export function ReflectFlowOverlay() {
   const { toast } = useToast();
 
   const [isPanelCollapsed, setIsPanelCollapsed] = useState(false);
-  const [panelPosition, setPanelPosition] = useState<{ top: number; left: number }>({ top: PANEL_MIN_TOP, left: -9999 }); 
+  const [panelPosition, setPanelPosition] = useState<{ top: number; left: number }>({ top: PANEL_MIN_TOP, left: -9999 });
   const [isDragging, setIsDragging] = useState(false);
   const [dragStartOffset, setDragStartOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [newlyAddedStepId, setNewlyAddedStepId] = useState<string | null>(null);
@@ -98,9 +98,12 @@ export function ReflectFlowOverlay() {
   const currentPanelPositionRef = useRef(panelPosition);
   useEffect(() => { currentPanelPositionRef.current = panelPosition; }, [panelPosition]);
 
+  const [focusedElementInfo, setFocusedElementInfo] = useState<{element: HTMLElement, initialValue: string} | null>(null);
+  const previousUrlRef = useRef<string>(typeof window !== 'undefined' ? window.location.href : '');
+
 
   useEffect(() => {
-    if (panelPosition.left === -9999) {
+    if (panelPosition.left === -9999 && typeof window !== 'undefined') {
       const initialWidth = isPanelCollapsed ? PANEL_WIDTH_COLLAPSED : PANEL_WIDTH_EXPANDED;
       setPanelPosition({
         top: PANEL_MIN_TOP,
@@ -176,9 +179,12 @@ export function ReflectFlowOverlay() {
       setIsElementContextMenuOpen(false);
       setInspectIconTarget(null);
       setHighlightedElementDetails(null);
+      if (typeof window !== 'undefined') {
+        previousUrlRef.current = window.location.href;
+      }
       toast({
         title: "Recording Started",
-        description: "Capturing click interactions. Click on elements on the page.",
+        description: "Capturing interactions. Perform actions on the page.",
       });
     } else {
       toast({
@@ -188,18 +194,90 @@ export function ReflectFlowOverlay() {
     }
   }, [isRecording, toast]);
 
+  const addNewStep = useCallback((commandKey: string, targetElement: HTMLElement | null, params: Omit<Step, 'id' | 'type' | 'commandKey' | 'badgeLabel' | 'description' | 'target' | 'timeout'> & Record<string, any>) => {
+    const commandInfo = findCommandByKey(commandKey);
+    if (!commandInfo) {
+        toast({ title: "Internal Error", description: `Unknown command key: ${commandKey}`, variant: "destructive" });
+        return;
+    }
+
+    let currentSelectors: string[] = [''];
+    let currentSelector: string = '';
+
+    if (targetElement && commandInfo.isElementCommand) {
+        const elementInfo = generateElementInfo(targetElement);
+        const selectors: string[] = [];
+        if (elementInfo.id) selectors.push(elementInfo.id);
+        if (elementInfo.cssSelector && elementInfo.cssSelector !== elementInfo.id) selectors.push(elementInfo.cssSelector);
+        if (elementInfo.xpath && !selectors.includes(elementInfo.xpath)) selectors.push(elementInfo.xpath);
+        if (selectors.length === 0 && elementInfo.tagName) selectors.push(elementInfo.tagName);
+        else if (selectors.length === 0) selectors.push('unknown');
+        currentSelectors = selectors;
+        currentSelector = selectors[0] || 'N/A';
+    }
+
+
+    const newStep: Step = {
+        id: String(Date.now()) + Math.random().toString(36).substring(2,7),
+        type: commandInfo.mapsToStepType,
+        commandKey: commandInfo.key,
+        badgeLabel: commandInfo.badgeLabel,
+        description: commandInfo.description,
+        selectors: commandInfo.isElementCommand ? currentSelectors : undefined,
+        selector: commandInfo.isElementCommand ? currentSelector : undefined,
+        target: 'main', 
+        timeout: 5000,
+        ...(commandInfo.defaultParams || {}),
+        ...params, 
+    } as Step; // Added 'as Step' to satisfy stricter type checking after Omit
+
+
+    setRecordedSteps(prevSteps => [...prevSteps, newStep]);
+    let toastDesc = `Recorded: ${commandInfo.badgeLabel}`;
+    if (commandInfo.isElementCommand && currentSelector && currentSelector !== 'N/A') {
+        toastDesc += ` on ${currentSelector}`;
+    } else if (params.url) {
+        toastDesc += ` to ${params.url}`;
+    } else if (params.key) {
+         toastDesc += `: ${params.key}`;
+    } else if (params.value) {
+         toastDesc += ` with value "${String(params.value).substring(0,20)}${String(params.value).length > 20 ? '...' : ''}"`;
+    } else if (params.visibleText) {
+        toastDesc += ` option "${String(params.visibleText).substring(0,20)}${String(params.visibleText).length > 20 ? '...' : ''}"`;
+    }
+    toast({ title: "Action Recorded", description: toastDesc });
+  }, [toast, setRecordedSteps]);
+
+
+  const checkUrlChangeAfterDelay = useCallback(() => {
+    setTimeout(() => {
+        if (typeof window !== 'undefined' && window.location.href !== previousUrlRef.current) {
+            addNewStep('navigate', null, { url: window.location.href });
+            previousUrlRef.current = window.location.href;
+        }
+    }, 100); 
+  }, [addNewStep]);
+
   const recordClick = useCallback((event: MouseEvent) => {
     if (isElementSelectorActive || !isRecording || isElementContextMenuOpen) return;
-
-    if (panelCardRef.current && panelCardRef.current.contains(event.target as Node)) {
-      return;
-    }
+    if (panelCardRef.current && panelCardRef.current.contains(event.target as Node)) return;
 
     const target = event.target as HTMLElement;
-    if (!target || !target.tagName || target === document.body || target === document.documentElement) {
-      return;
+    if (!target || !target.tagName || target === document.body || target === document.documentElement) return;
+    
+    // If the click is on an input/select, the specific handlers (focusOut, change) will manage it.
+    // This click handler should ignore clicks that are part of initiating those actions.
+    if (target.matches('input, textarea, select')) {
+        // Let specific handlers like focusOut for inputs or change for selects handle these.
+        // However, clicks on checkboxes and radios should still be recorded as clicks.
+        if (target.matches('input[type="checkbox"], input[type="radio"]')) {
+           // Proceed to record click for these
+        } else {
+           checkUrlChangeAfterDelay(); // Still check for URL change if click was on other input types
+           return; 
+        }
     }
-
+    
     const elementInfo = generateElementInfo(target);
     const selectors: string[] = [];
     if (elementInfo.id) selectors.push(elementInfo.id);
@@ -225,18 +303,92 @@ export function ReflectFlowOverlay() {
 
     setRecordedSteps(prevSteps => [...prevSteps, newStep]);
     toast({ title: "Action Recorded", description: `Recorded: Click on ${primarySelector}` });
-  }, [toast, isElementSelectorActive, isRecording, isElementContextMenuOpen]);
+    checkUrlChangeAfterDelay();
+  }, [toast, isElementSelectorActive, isRecording, isElementContextMenuOpen, checkUrlChangeAfterDelay, setRecordedSteps]);
+
+
+  const handleFocusIn = useCallback((event: FocusEvent) => {
+    if (panelCardRef.current && panelCardRef.current.contains(event.target as Node)) return;
+    const target = event.target as HTMLElement;
+    if (target.matches('input[type="text"], input[type="password"], input[type="email"], input[type="search"], input[type="url"], input[type="tel"], input[type="number"], textarea')) {
+        setFocusedElementInfo({ element: target, initialValue: (target as HTMLInputElement | HTMLTextAreaElement).value });
+    }
+  }, []);
+
+  const handleFocusOut = useCallback((event: FocusEvent) => {
+    if (panelCardRef.current && panelCardRef.current.contains(event.target as Node)) return;
+    if (focusedElementInfo && event.target === focusedElementInfo.element) {
+        const currentValue = (focusedElementInfo.element as HTMLInputElement | HTMLTextAreaElement).value;
+        if (currentValue !== focusedElementInfo.initialValue) {
+            addNewStep('setValue', focusedElementInfo.element, { value: currentValue });
+        }
+        setFocusedElementInfo(null);
+    }
+  }, [focusedElementInfo, addNewStep]);
+
+  const handleChangeEvent = useCallback((event: Event) => {
+    if (panelCardRef.current && panelCardRef.current.contains(event.target as Node)) return;
+    const target = event.target as HTMLSelectElement;
+    if (target.tagName === 'SELECT') {
+        const selectedOption = target.options[target.selectedIndex];
+        if (selectedOption) {
+            addNewStep('selectByVisibleText', target, { visibleText: selectedOption.text });
+        }
+    }
+  }, [addNewStep]);
+
+  const handleGeneralKeyDown = useCallback((event: KeyboardEvent) => {
+    const activeElement = document.activeElement as HTMLElement;
+    if (panelCardRef.current && panelCardRef.current.contains(activeElement)) return;
+
+    if (activeElement && (activeElement.tagName === 'INPUT' || activeElement.tagName === 'TEXTAREA' || activeElement.isContentEditable)) {
+      if (!['Enter', 'Tab', 'Escape'].includes(event.key)) {
+        return; 
+      }
+    }
+
+    if (['Enter', 'Tab', 'Escape'].includes(event.key)) {
+        addNewStep('keyDown', document.activeElement instanceof HTMLElement ? document.activeElement : null, { key: event.key });
+    }
+  }, [addNewStep]);
+
+  const handlePopState = useCallback(() => {
+    if (typeof window !== 'undefined' && window.location.href !== previousUrlRef.current) {
+        addNewStep('navigate', null, { url: window.location.href });
+        previousUrlRef.current = window.location.href;
+    }
+  }, [addNewStep]);
+
 
   useEffect(() => {
-    if (isRecording && !isElementSelectorActive && !isElementContextMenuOpen) {
-      document.addEventListener('click', recordClick, true);
+    const shouldListen = isRecording && !isElementSelectorActive && !isElementContextMenuOpen;
+    if (shouldListen) {
+        document.addEventListener('click', recordClick, true);
+        document.addEventListener('focusin', handleFocusIn, true);
+        document.addEventListener('focusout', handleFocusOut, true);
+        document.addEventListener('change', handleChangeEvent, true); 
+        document.addEventListener('keydown', handleGeneralKeyDown, true);
+        window.addEventListener('popstate', handlePopState);
+        if (typeof window !== 'undefined') {
+            previousUrlRef.current = window.location.href;
+        }
     } else {
-      document.removeEventListener('click', recordClick, true);
+        document.removeEventListener('click', recordClick, true);
+        document.removeEventListener('focusin', handleFocusIn, true);
+        document.removeEventListener('focusout', handleFocusOut, true);
+        document.removeEventListener('change', handleChangeEvent, true);
+        document.removeEventListener('keydown', handleGeneralKeyDown, true);
+        window.removeEventListener('popstate', handlePopState);
     }
     return () => {
-      document.removeEventListener('click', recordClick, true);
+        document.removeEventListener('click', recordClick, true);
+        document.removeEventListener('focusin', handleFocusIn, true);
+        document.removeEventListener('focusout', handleFocusOut, true);
+        document.removeEventListener('change', handleChangeEvent, true);
+        document.removeEventListener('keydown', handleGeneralKeyDown, true);
+        window.removeEventListener('popstate', handlePopState);
     };
-  }, [isRecording, recordClick, isElementSelectorActive, isElementContextMenuOpen]);
+  }, [isRecording, recordClick, handleFocusIn, handleFocusOut, handleChangeEvent, handleGeneralKeyDown, handlePopState, isElementSelectorActive, isElementContextMenuOpen]);
 
 
   const handleMouseOver = useCallback((event: MouseEvent) => {
@@ -401,13 +553,13 @@ export function ReflectFlowOverlay() {
       timeout: 5000,
       ...(commandInfo.defaultParams || {})
     };
-    
+
     const allParamsFromCmd = [...commandInfo.requiredParams, ...commandInfo.optionalParams];
     allParamsFromCmd.forEach(paramDefString => {
         const namePart = paramDefString.split(':')[0].replace('...', '').replace('?', '').trim();
         const typePart = (paramDefString.split(':')[1] || 'string').trim().toLowerCase();
-        
-        if (!(namePart in newStepData)) { 
+
+        if (!(namePart in newStepData)) {
             if (typePart.includes('string') || typePart.includes('function') || typePart.includes('object') || typePart.includes('array')) {
                 (newStepData as any)[namePart] = '';
             } else if (typePart.includes('number')) {
@@ -415,7 +567,7 @@ export function ReflectFlowOverlay() {
             } else if (typePart.includes('boolean')) {
                 (newStepData as any)[namePart] = false;
             } else {
-                 (newStepData as any)[namePart] = ''; 
+                 (newStepData as any)[namePart] = '';
             }
         }
     });
@@ -430,7 +582,7 @@ export function ReflectFlowOverlay() {
     toast({ title: "Step Added", description: `${commandInfo.badgeLabel} step added for ${primarySelector}.` });
     setNewlyAddedStepId(newStep.id!);
     closeElementContextMenu();
-  }, [toast, closeElementContextMenu]);
+  }, [toast, closeElementContextMenu, setRecordedSteps]);
 
   const handleAddManualStep = useCallback(() => {
     const baseId = String(Date.now()) + Math.random().toString(36).substring(2, 7);
@@ -441,16 +593,17 @@ export function ReflectFlowOverlay() {
         description: 'New Step - Choose Command',
         target: 'main',
         timeout: 5000,
-        selectors: [''], 
-        selector: ''      
+        selectors: [''],
+        selector: ''
     };
     setRecordedSteps(prev => [...prev, newStep]);
     setNewlyAddedStepId(newStep.id);
     toast({ title: "New Step Added", description: "Choose a command for the new step." });
-  }, [toast]);
+  }, [toast, setRecordedSteps]);
 
 
   const handleSaveSession = useCallback(() => {
+    if (typeof window === 'undefined') return;
     const sessionToSave: RecordingSession = {
       title: "My Recorded Session " + new Date().toLocaleTimeString(),
       description: "A recording of user interactions.",
@@ -475,6 +628,7 @@ export function ReflectFlowOverlay() {
   }, [toast, recordedSteps]);
 
   const handleExportSession = useCallback(() => {
+    if (typeof window === 'undefined') return;
     const sessionToSave: RecordingSession = {
       title: "My Recorded Session - " + new Date().toISOString(),
       description: "A recording of user interactions exported from ReflectFlow.",
@@ -513,13 +667,13 @@ export function ReflectFlowOverlay() {
     if (newlyAddedStepId === updatedStep.id && updatedStep.type !== 'undetermined') {
         setNewlyAddedStepId(null);
     }
-  }, [toast, newlyAddedStepId]);
+  }, [toast, newlyAddedStepId, setRecordedSteps]);
 
   const handleDeleteStep = useCallback((id: string) => {
     setRecordedSteps(prev => prev.filter(s => s.id !== id));
     toast({ title: "Step Deleted", description: "The step has been removed." });
-  }, [toast]);
-  
+  }, [toast, setRecordedSteps]);
+
   const handleReorderSteps = useCallback((oldIndex: number, newIndex: number) => {
     setRecordedSteps((prevSteps) => {
       if (oldIndex !== newIndex && oldIndex >= 0 && oldIndex < prevSteps.length && newIndex >= 0 && newIndex < prevSteps.length) {
@@ -528,11 +682,11 @@ export function ReflectFlowOverlay() {
       return prevSteps;
     });
     toast({ title: "Steps Reordered", description: "The order of the steps has been updated." });
-  }, [toast]);
+  }, [toast, setRecordedSteps]);
 
   const panelWidthClass = isPanelCollapsed ? `w-[${PANEL_WIDTH_COLLAPSED}px]` : `w-[${PANEL_WIDTH_EXPANDED}px]`;
 
-  if (panelPosition.left === -9999) {
+  if (panelPosition.left === -9999 && typeof window !== 'undefined') {
     return null;
   }
 
@@ -581,7 +735,7 @@ export function ReflectFlowOverlay() {
         </CardHeader>
         {!isPanelCollapsed && (
           <>
-            <CardContent className="flex-1 min-h-0 overflow-hidden p-0 relative">
+            <CardContent className="flex-1 flex flex-col min-h-0 overflow-hidden p-0 relative">
               <StepList
                 steps={recordedSteps}
                 onUpdateStep={handleUpdateStep}
@@ -641,4 +795,3 @@ export function ReflectFlowOverlay() {
     </div>
   );
 }
-    
