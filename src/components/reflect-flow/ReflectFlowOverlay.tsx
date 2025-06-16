@@ -10,7 +10,7 @@ import { StepList } from './StepList';
 import { ElementHoverPopup } from './ElementHoverPopup';
 import { HighlightOverlay } from './HighlightOverlay';
 import { useToast } from '@/hooks/use-toast';
-import { PlayIcon, CheckboxSquareIcon, CheckboxUncheckedIcon, FileIcon, TargetIcon, AddIcon } from './icons';
+import { PlayIcon, CheckboxSquareIcon, CheckboxUncheckedIcon, FileIcon, TargetIcon, AddIcon, NavigateIcon, ClickIcon as ClickActionIcon, TypeActionIcon as TypeActionIconLucide, ScrollIcon as ScrollActionIcon, AssertIcon as WaitActionIcon, KeyboardIcon as KeyActionIcon, MoveToIcon as MoveActionIcon } from './icons'; // Updated imports
 import { CommandInfo, findCommandByKey, availableCommands } from '@/lib/commands';
 
 
@@ -545,7 +545,7 @@ export function ReflectFlowOverlay() {
     >
       <Card
         ref={panelCardRef}
-        className={`h-full max-h-[calc(100vh-32px)] flex flex-col shadow-2xl pointer-events-auto overflow-hidden bg-card/90 backdrop-blur-sm transition-[width] duration-300 ease-in-out ${panelWidthClass}`}
+        className={`max-h-[calc(100vh-32px)] flex flex-col shadow-2xl pointer-events-auto overflow-hidden bg-card/90 backdrop-blur-sm transition-[width] duration-300 ease-in-out ${panelWidthClass}`}
       >
         <CardHeader
           className="p-4 border-b cursor-grab"
@@ -652,5 +652,6 @@ export function ReflectFlowOverlay() {
     </div>
   );
 }
+    
 
     
