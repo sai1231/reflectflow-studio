@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useCallback, useEffect, useRef } from 'react';
-import type { Step, RecordingSession, UndeterminedStep, ElementInfoForPopup } from '@/types';
+import type { Step, UndeterminedStep, ElementInfoForPopup } from '@/types';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { HeaderControls } from './HeaderControls';
@@ -12,6 +12,7 @@ import { HighlightOverlay } from './HighlightOverlay';
 import { useToast } from '@/hooks/use-toast';
 import { FileIcon, TargetIcon, AddIcon } from './icons';
 import { CommandInfo, findCommandByKey } from '@/lib/commands';
+import { arrayMove } from '@dnd-kit/sortable';
 
 
 interface ElementDetails {
@@ -85,7 +86,7 @@ export function ReflectFlowOverlay() {
   const { toast } = useToast();
 
   const [isPanelCollapsed, setIsPanelCollapsed] = useState(false);
-  const [panelPosition, setPanelPosition] = useState<{ top: number; left: number }>({ top: PANEL_MIN_TOP, left: -9999 }); // Initialize off-screen
+  const [panelPosition, setPanelPosition] = useState<{ top: number; left: number }>({ top: PANEL_MIN_TOP, left: -9999 }); 
   const [isDragging, setIsDragging] = useState(false);
   const [dragStartOffset, setDragStartOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [newlyAddedStepId, setNewlyAddedStepId] = useState<string | null>(null);
@@ -153,7 +154,7 @@ export function ReflectFlowOverlay() {
   }, [handleMouseMoveDraggable]);
 
   const handleMouseDownDraggable = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
-    if ((event.target as HTMLElement).closest('button, input, [role="button"], [role="menuitem"], [role="option"], [data-command-input="true"], [data-command-item="true"], textarea')) {
+    if ((event.target as HTMLElement).closest('button, input, [role="button"], [role="menuitem"], [role="option"], [data-command-input="true"], [data-command-item="true"], textarea, [aria-label~="Drag"]')) {
         return;
     }
     event.preventDefault();
@@ -488,6 +489,16 @@ export function ReflectFlowOverlay() {
     setRecordedSteps(prev => prev.filter(s => s.id !== id));
     toast({ title: "Step Deleted", description: "The step has been removed." });
   }, [toast]);
+  
+  const handleReorderSteps = useCallback((oldIndex: number, newIndex: number) => {
+    setRecordedSteps((prevSteps) => {
+      if (oldIndex !== newIndex && oldIndex >= 0 && oldIndex < prevSteps.length && newIndex >= 0 && newIndex < prevSteps.length) {
+        return arrayMove(prevSteps, oldIndex, newIndex);
+      }
+      return prevSteps;
+    });
+    toast({ title: "Steps Reordered", description: "The order of the steps has been updated." });
+  }, [toast]);
 
   const panelWidthClass = isPanelCollapsed ? `w-[${PANEL_WIDTH_COLLAPSED}px]` : `w-[${PANEL_WIDTH_EXPANDED}px]`;
 
@@ -546,6 +557,7 @@ export function ReflectFlowOverlay() {
                 onDeleteStep={handleDeleteStep}
                 newlyAddedStepId={newlyAddedStepId}
                 onStepDetermined={() => newlyAddedStepId ? setNewlyAddedStepId(null) : undefined}
+                onReorderSteps={handleReorderSteps}
               />
             </CardContent>
             <CardFooter className="p-3 border-t flex flex-col items-start space-y-2">
@@ -601,4 +613,5 @@ export function ReflectFlowOverlay() {
     
 
     
+
 

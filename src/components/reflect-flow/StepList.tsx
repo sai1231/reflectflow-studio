@@ -4,6 +4,20 @@
 import type { Step } from '@/types';
 import { StepItem } from './StepItem';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
 
 interface StepListProps {
   steps: Step[];
@@ -11,9 +25,28 @@ interface StepListProps {
   onDeleteStep: (id: string) => void;
   newlyAddedStepId: string | null;
   onStepDetermined: (id: string) => void;
+  onReorderSteps: (oldIndex: number, newIndex: number) => void;
 }
 
-export function StepList({ steps, onUpdateStep, onDeleteStep, newlyAddedStepId, onStepDetermined }: StepListProps) {
+export function StepList({ steps, onUpdateStep, onDeleteStep, newlyAddedStepId, onStepDetermined, onReorderSteps }: StepListProps) {
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  function handleDragEnd(event: DragEndEvent) {
+    const {active, over} = event;
+    if (over && active.id !== over.id) {
+      const oldIndex = steps.findIndex((step) => step.id === active.id);
+      const newIndex = steps.findIndex((step) => step.id === over.id);
+      if (oldIndex !== -1 && newIndex !== -1) {
+        onReorderSteps(oldIndex, newIndex);
+      }
+    }
+  }
+
   if (steps.length === 0) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground p-8 min-h-0">
@@ -31,22 +64,34 @@ export function StepList({ steps, onUpdateStep, onDeleteStep, newlyAddedStepId, 
   }
 
   return (
-    <ScrollArea className="h-full w-full">
-      <div className="p-1 space-y-1">
-        {steps.map((step) => (
-          <StepItem
-            key={step.id}
-            step={step}
-            onUpdateStep={onUpdateStep}
-            onDeleteStep={onDeleteStep}
-            initialExpanded={step.id === newlyAddedStepId || step.type === 'undetermined'}
-            onCommandSelected={() => onStepDetermined(step.id)}
-          />
-        ))}
-      </div>
-    </ScrollArea>
+    <DndContext
+      sensors={sensors}
+      collisionDetection={closestCenter}
+      onDragEnd={handleDragEnd}
+    >
+      <SortableContext
+        items={steps.map(step => step.id)}
+        strategy={verticalListSortingStrategy}
+      >
+        <ScrollArea className="h-full w-full">
+          <div className="p-1 space-y-1">
+            {steps.map((step) => (
+              <StepItem
+                key={step.id}
+                step={step}
+                onUpdateStep={onUpdateStep}
+                onDeleteStep={onDeleteStep}
+                initialExpanded={step.id === newlyAddedStepId || step.type === 'undetermined'}
+                onCommandSelected={() => onStepDetermined(step.id)}
+              />
+            ))}
+          </div>
+        </ScrollArea>
+      </SortableContext>
+    </DndContext>
   );
 }
 
     
+
 

@@ -15,6 +15,9 @@ import { Badge } from '@/components/ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { CommandInfo, availableCommands, findCommandByKey } from '@/lib/commands';
+import { cn } from '@/lib/utils';
+import { useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 import {
   ClickIcon,
@@ -128,6 +131,22 @@ export function StepItem({ step, initialExpanded = false, onUpdateStep, onDelete
 
   const commandInputRef = useRef<HTMLInputElement>(null); 
   const popoverTriggerRef = useRef<HTMLButtonElement>(null);
+
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({id: step.id});
+
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition: transition || undefined,
+    opacity: isDragging ? 0.7 : 1,
+    zIndex: isDragging ? 1000 : undefined,
+  };
 
 
   const currentStepCommandInfo = useMemo(() => {
@@ -517,10 +536,21 @@ export function StepItem({ step, initialExpanded = false, onUpdateStep, onDelete
 
   return (
     <TooltipProvider delayDuration={300}>
-      <Card className="mb-2 shadow-sm transition-all duration-150 ease-in-out">
+      <Card 
+        ref={setNodeRef} 
+        style={style} 
+        className={cn("mb-2 shadow-sm", isDragging && "shadow-xl ring-2 ring-primary")}
+      >
         <CardContent className="p-3">
           <div className="flex items-center space-x-3">
-            <DragHandleIcon className="h-5 w-5 text-muted-foreground cursor-grab flex-shrink-0" />
+            <div 
+              {...attributes} 
+              {...listeners} 
+              className="cursor-grab p-1 -m-1 focus:outline-none focus:ring-2 focus:ring-ring rounded" 
+              aria-label="Drag to reorder step"
+            >
+              <DragHandleIcon className="h-5 w-5 text-muted-foreground flex-shrink-0" />
+            </div>
             <Tooltip>
               <TooltipTrigger asChild>
                 <CurrentStepIcon className="h-5 w-5 text-primary flex-shrink-0" />
@@ -587,4 +617,5 @@ export function StepItem({ step, initialExpanded = false, onUpdateStep, onDelete
     </TooltipProvider>
   );
 }
+
 
