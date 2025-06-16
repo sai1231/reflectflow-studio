@@ -12,37 +12,37 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
   DropdownMenuPortal,
-  DropdownMenuTrigger // Added missing import
+  DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu";
 import { availableCommands, type CommandInfo } from '@/lib/commands';
 import {
-  ClickIcon, // For click, doubleClick
-  TypeActionIcon, // For setValue, addValue, clearValue
-  ScrollIcon, // For scrollIntoView
-  WaitIcon, // For Wait For sub-menu trigger
-  AssertionIcon, // For Assertions/State & Data sub-menu trigger
-  ActionIcon, // For Actions sub-menu trigger
-  ViewIcon, // For isDisplayed, waitForDisplayed
-  GetTextIcon, // For getText
-  GetAttributeIcon, // For getAttribute
-  IsEnabledIcon, // For isEnabled, waitForEnabled
-  IsExistingIcon, // For isExisting, waitForExist, getElement, getElements
+  ClickIcon,
+  TypeActionIcon,
+  ScrollIcon,
+  WaitIcon,
+  AssertionIcon,
+  ActionIcon,
+  ViewIcon,
+  GetTextIcon,
+  GetAttributeIcon,
+  IsEnabledIcon,
+  IsExistingIcon,
   AddValueIcon,
   ClearValueIcon,
   DoubleClickIcon,
-  MoveToIcon, // For moveTo
-  GetSizeIcon, // For getSize
-  GetLocationIcon, // For getLocation
-  FileCodeIcon, // For getHTML
-  TagsIcon, // For getTagName
-  HelpCircleIcon, // Fallback icon
-  ChevronsUpDownIcon, // For isEqual
-  HandIcon, // for dragAndDrop, touchAction
-  ListChecksIcon, // for selectByAttribute, selectByIndex, selectByVisibleText
-  GetPropertyIcon, // for getProperty
-  Sigma, // Placeholder for getComputedLabel, getComputedRole, nextElement, parentElement, previousElement
-  CheckCircle2, // For isSelected, isFocused
-  PlayIcon, // For isStable, waitForStable (re-using for now)
+  MoveToIcon,
+  GetSizeIcon,
+  GetLocationIcon,
+  FileCodeIcon,
+  TagsIcon,
+  HelpCircleIcon,
+  ChevronsUpDownIcon,
+  HandIcon,
+  ListChecksIcon,
+  GetPropertyIcon,
+  Sigma,
+  CheckCircle2,
+  PlayIcon,
 } from './icons';
 
 interface ElementInfo {
@@ -73,30 +73,32 @@ const getIconForCommandKey = (key: string): React.ElementType => {
     case 'touchAction': return HandIcon;
 
     case 'getAttribute': return GetAttributeIcon;
-    case 'getCSSProperty': return GetPropertyIcon; 
-    case 'getComputedLabel': return Sigma; 
-    case 'getComputedRole': return Sigma; 
-    case 'getElement': return IsExistingIcon;
-    case 'getElements': return IsExistingIcon;
+    case 'getCSSProperty': return GetPropertyIcon;
+    case 'getComputedLabel': return Sigma;
+    case 'getComputedRole': return Sigma;
+    case 'getElement': return IsExistingIcon; // Represents finding/getting an element
+    case 'getElements': return IsExistingIcon; // Represents finding/getting elements
     case 'getHTML': return FileCodeIcon;
     case 'getLocation': return GetLocationIcon;
     case 'getProperty': return GetPropertyIcon;
     case 'getSize': return GetSizeIcon;
     case 'getTagName': return TagsIcon;
     case 'getText': return GetTextIcon;
-    case 'getValue': return TypeActionIcon; 
-    case 'isClickable': return ClickIcon;
+    case 'getValue': return TypeActionIcon; // Reusing, could be more specific if needed
+
+    case 'isClickable': return ClickIcon; // Related to clickability
     case 'isDisplayed': return ViewIcon;
     case 'isEnabled': return IsEnabledIcon;
     case 'isEqual': return ChevronsUpDownIcon;
     case 'isExisting': return IsExistingIcon;
     case 'isFocused': return CheckCircle2;
-    case 'isSelected': return CheckCircle2; 
-    case 'isStable': return PlayIcon;
-    case 'nextElement': return Sigma; 
-    case 'parentElement': return Sigma; 
-    case 'previousElement': return Sigma; 
-    
+    case 'isSelected': return CheckCircle2;
+    case 'isStable': return PlayIcon; // Reusing
+
+    case 'nextElement': return Sigma; // Placeholder, could be specific arrow
+    case 'parentElement': return Sigma; // Placeholder
+    case 'previousElement': return Sigma; // Placeholder
+
     case 'selectByAttribute': case 'selectByIndex': case 'selectByVisibleText': return ListChecksIcon;
 
     case 'waitForClickable': return ClickIcon;
@@ -108,15 +110,18 @@ const getIconForCommandKey = (key: string): React.ElementType => {
   }
 };
 
-// Categorize commands based on their purpose or type of interaction
 const elementCommands = availableCommands.filter(cmd => cmd.isElementCommand);
 
 const actionCommands = elementCommands.filter(cmd =>
   ['click', 'doubleClick', 'setValue', 'addValue', 'clearValue', 'scrollIntoView', 'moveTo', 'dragAndDrop', 'selectByAttribute', 'selectByIndex', 'selectByVisibleText', 'touchAction'].includes(cmd.key)
 );
 
-const stateAndDataCommands = elementCommands.filter(cmd =>
-  ['getAttribute', 'getCSSProperty', 'getComputedLabel', 'getComputedRole', 'getElement', 'getElements', 'getHTML', 'getLocation', 'getProperty', 'getSize', 'getTagName', 'getText', 'getValue', 'isClickable', 'isDisplayed', 'isEnabled', 'isEqual', 'isExisting', 'isFocused', 'isSelected', 'isStable', 'nextElement', 'parentElement', 'previousElement'].includes(cmd.key)
+const fetchingCommands = elementCommands.filter(cmd =>
+  ['getAttribute', 'getCSSProperty', 'getComputedLabel', 'getComputedRole', 'getElement', 'getElements', 'getHTML', 'getLocation', 'getProperty', 'getSize', 'getTagName', 'getText', 'getValue', 'nextElement', 'parentElement', 'previousElement'].includes(cmd.key)
+);
+
+const assertionCommands = elementCommands.filter(cmd =>
+  ['isClickable', 'isDisplayed', 'isEnabled', 'isEqual', 'isExisting', 'isFocused', 'isSelected', 'isStable'].includes(cmd.key)
 );
 
 const waitCommands = elementCommands.filter(cmd =>
@@ -161,7 +166,7 @@ export function ElementHoverPopup({ elementInfo, isOpen, onCommandSelected, posi
       />
       <DropdownMenuPortal>
         <DropdownMenuContent
-          className="w-64 z-[10002]" // Ensure z-index is high enough
+          className="w-64 z-[10002]"
           align="start"
           sideOffset={5}
           onCloseAutoFocus={(e) => e.preventDefault()}
@@ -182,19 +187,32 @@ export function ElementHoverPopup({ elementInfo, isOpen, onCommandSelected, posi
             </DropdownMenuSub>
           )}
 
-          {stateAndDataCommands.length > 0 && (
+          {fetchingCommands.length > 0 && (
             <DropdownMenuSub>
               <DropdownMenuSubTrigger>
-                <AssertionIcon className="mr-2 h-4 w-4" /> State & Data
+                <GetTextIcon className="mr-2 h-4 w-4" /> Fetching
               </DropdownMenuSubTrigger>
               <DropdownMenuPortal>
                 <DropdownMenuSubContent className="z-[10003]">
-                  {renderCommandItems(stateAndDataCommands)}
+                  {renderCommandItems(fetchingCommands)}
                 </DropdownMenuSubContent>
               </DropdownMenuPortal>
             </DropdownMenuSub>
           )}
-          
+
+          {assertionCommands.length > 0 && (
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger>
+                <AssertionIcon className="mr-2 h-4 w-4" /> Assertions
+              </DropdownMenuSubTrigger>
+              <DropdownMenuPortal>
+                <DropdownMenuSubContent className="z-[10003]">
+                  {renderCommandItems(assertionCommands)}
+                </DropdownMenuSubContent>
+              </DropdownMenuPortal>
+            </DropdownMenuSub>
+          )}
+
           {waitCommands.length > 0 && (
             <DropdownMenuSub>
               <DropdownMenuSubTrigger>
