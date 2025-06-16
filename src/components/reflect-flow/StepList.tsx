@@ -18,7 +18,7 @@ interface StepListProps {
 export function StepList({ steps, selectedSteps, onSelectStep, onUpdateStep, onDeleteStep, newlyAddedStepId, onStepDetermined }: StepListProps) {
   if (steps.length === 0) {
     return (
-      <div className="flex-grow flex flex-col items-center justify-center text-muted-foreground p-8">
+      <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground p-8 min-h-0">
         <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" className="opacity-50 mb-4">
           <path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"></path>
           <path d="M12 8l-2.5 2.5"></path><path d="M12 8l2.5 2.5"></path>
@@ -33,7 +33,7 @@ export function StepList({ steps, selectedSteps, onSelectStep, onUpdateStep, onD
   }
 
   return (
-    <ScrollArea className="flex-grow min-h-0">
+    <ScrollArea className="flex-1 min-h-0">
       <div className="p-1 space-y-1">
         {steps.map((step, index) => (
           <StepItem
