@@ -11,7 +11,7 @@ import { ElementHoverPopup } from './ElementHoverPopup';
 import { HighlightOverlay } from './HighlightOverlay';
 import { useToast } from '@/hooks/use-toast';
 import { PlayIcon, CheckboxSquareIcon, CheckboxUncheckedIcon, FileIcon, TargetIcon, AddIcon } from './icons';
-import { findCommandByKey } from '@/lib/commands';
+import { CommandInfo, findCommandByKey, availableCommands } from '@/lib/commands';
 
 
 interface ElementDetails {
@@ -220,11 +220,13 @@ export function ReflectFlowOverlay() {
       id: String(Date.now()) + Math.random().toString(36).substring(2,7),
       type: 'click',
       commandKey: 'click',
+      badgeLabel: commandInfo?.badgeLabel || 'Click',
       description: commandInfo?.description || `Click on ${elementInfo.tagName}${primarySelector !== elementInfo.tagName ? ` (${primarySelector})` : ''}`,
       selectors: selectors,
       selector: primarySelector,
       target: 'main',
       timeout: 5000,
+      ...(commandInfo?.defaultParams as Partial<ClickStep> || {})
     };
 
     setRecordedSteps(prevSteps => [...prevSteps, newStep]);
@@ -404,33 +406,51 @@ export function ReflectFlowOverlay() {
     const primarySelector = allSelectors[0];
     const baseId = String(Date.now()) + Math.random().toString(36).substring(2,7);
 
-    let newStep: Partial<Step> = {
+    let newStep: Step = {
       id: baseId,
       type: commandInfo.mapsToStepType,
       commandKey: commandInfo.key,
+      badgeLabel: commandInfo.badgeLabel,
       description: commandInfo.description,
-      selectors: commandInfo.isElementCommand ? allSelectors : undefined,
-      selector: commandInfo.isElementCommand ? primarySelector : undefined,
+      selectors: commandInfo.isElementCommand ? allSelectors : [''],
+      selector: commandInfo.isElementCommand ? primarySelector : '',
       target: 'main',
       timeout: 5000,
       ...(commandInfo.defaultParams || {})
-    };
-    
-    // Initialize required/optional params for the specific command
-    // This logic is simplified here; StepItem's handleCommandSelect is more robust
-    // For inspector-added steps, we might need more context for some params.
-    if (commandInfo.key === 'setValue' || commandInfo.key === 'addValue') {
-        (newStep as TypeStep).value = ''; // Prompt user to fill this
-    } else if (commandInfo.key === 'getAttribute') {
-        (newStep as WaitForElementStep).attributeName = 'your-attribute-name';
-        (newStep as WaitForElementStep).property = `attribute:your-attribute-name`;
-    } else if (commandInfo.key === 'getCSSProperty') {
-        (newStep as WaitForElementStep).cssProperty = 'your-css-property';
-        (newStep as WaitForElementStep).property = `css:your-css-property`;
-    }
-     // ... and so on for other commands that require initial param setup from inspector context
+    } as Step; // Cast to Step initially, specific props will be added based on command
 
-    setRecordedSteps(prev => [...prev, newStep as Step]);
+    // Initialize required and optional params for the specific command
+    const allParamsFromCmd = [...commandInfo.requiredParams, ...commandInfo.optionalParams];
+    allParamsFromCmd.forEach(paramDefString => {
+        const namePart = paramDefString.split(':')[0].replace('...', '').replace('?', '').trim();
+        const typePart = (paramDefString.split(':')[1] || 'string').trim().toLowerCase();
+        
+        if (!(namePart in newStep)) { // Only if not already set by defaultParams
+            if (typePart.includes('string') || typePart.includes('function') || typePart.includes('object') || typePart.includes('array')) {
+                (newStep as any)[namePart] = '';
+            } else if (typePart.includes('number')) {
+                (newStep as any)[namePart] = 0;
+            } else if (typePart.includes('boolean')) {
+                (newStep as any)[namePart] = false;
+            } else {
+                 (newStep as any)[namePart] = ''; // Fallback
+            }
+        }
+    });
+    
+    // Example: For 'getAttribute', the 'attributeName' field needs to be initialized if not present from defaultParams
+    if (commandInfo.key === 'getAttribute' && !('attributeName' in newStep)) {
+        (newStep as WaitForElementStep).attributeName = '';
+    }
+    if (commandInfo.key === 'getCSSProperty' && !('cssProperty' in newStep)) {
+        (newStep as WaitForElementStep).cssProperty = '';
+    }
+     if (commandInfo.key === 'getProperty' && !('jsPropertyName' in newStep)) {
+        (newStep as WaitForElementStep).jsPropertyName = '';
+    }
+
+
+    setRecordedSteps(prev => [...prev, newStep]);
     toast({ title: "Step Added", description: `${commandInfo.description} step added for ${primarySelector}.` });
     setNewlyAddedStepId(newStep.id!);
     closeElementContextMenu();
@@ -442,6 +462,7 @@ export function ReflectFlowOverlay() {
         id: baseId,
         type: 'undetermined',
         description: 'New Step - Choose Command',
+        badgeLabel: 'New Step',
         target: 'main',
         timeout: 5000,
         selectors: [''],
@@ -495,10 +516,9 @@ export function ReflectFlowOverlay() {
   const handleUpdateStep = useCallback((updatedStep: Step) => {
     setRecordedSteps(prev => prev.map(s => s.id === updatedStep.id ? updatedStep : s));
     if (updatedStep.type !== 'undetermined') {
-        // Find command info to ensure description matches, if it was part of defaultParams or similar
         const cmdInfo = findCommandByKey(updatedStep.commandKey || '');
         const finalDescription = cmdInfo?.description || updatedStep.description;
-        toast({ title: "Step Updated", description: `Step "${finalDescription}" has been configured.` });
+        toast({ title: "Step Updated", description: `Step "${updatedStep.badgeLabel || finalDescription}" has been configured.` });
     }
     if (newlyAddedStepId === updatedStep.id && updatedStep.type !== 'undetermined') {
         setNewlyAddedStepId(null);
@@ -561,18 +581,16 @@ export function ReflectFlowOverlay() {
         </CardHeader>
         {!isPanelCollapsed && (
           <>
-            <CardContent className="flex-grow p-0 overflow-hidden relative">
-              <div className="h-full">
-                <StepList
-                  steps={recordedSteps}
-                  selectedSteps={selectedSteps}
-                  onSelectStep={handleSelectStep}
-                  onUpdateStep={handleUpdateStep}
-                  onDeleteStep={handleDeleteStep}
-                  newlyAddedStepId={newlyAddedStepId}
-                  onStepDetermined={() => newlyAddedStepId ? setNewlyAddedStepId(null) : undefined}
-                />
-              </div>
+            <CardContent className="flex-grow p-0 relative flex flex-col min-h-0">
+              <StepList
+                steps={recordedSteps}
+                selectedSteps={selectedSteps}
+                onSelectStep={handleSelectStep}
+                onUpdateStep={handleUpdateStep}
+                onDeleteStep={handleDeleteStep}
+                newlyAddedStepId={newlyAddedStepId}
+                onStepDetermined={() => newlyAddedStepId ? setNewlyAddedStepId(null) : undefined}
+              />
             </CardContent>
             <CardFooter className="p-3 border-t flex flex-col items-start space-y-2">
                 <div className="flex justify-between w-full items-center">
