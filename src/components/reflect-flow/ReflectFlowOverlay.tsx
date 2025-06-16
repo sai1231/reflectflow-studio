@@ -10,7 +10,7 @@ import { StepList } from './StepList';
 import { ElementHoverPopup } from './ElementHoverPopup';
 import { HighlightOverlay } from './HighlightOverlay';
 import { useToast } from '@/hooks/use-toast';
-import { FileIcon, InspectIcon, AddIcon } from './icons'; // Changed TargetIcon to InspectIcon
+import { FileIcon, InspectIcon, AddIcon } from './icons';
 import { CommandInfo, findCommandByKey, availableCommands } from '@/lib/commands';
 import { arrayMove } from '@dnd-kit/sortable';
 
@@ -583,6 +583,7 @@ export function ReflectFlowOverlay() {
     const isAnySelectorModeActive = isElementSelectorActive || !!pickingSelectorForStepId;
 
     if (isAnySelectorModeActive) {
+      document.body.classList.add('reflectflow-inspect-mode-active');
       document.addEventListener('keydown', handleKeyDown);
       if (!isElementContextMenuOpen) { 
         document.addEventListener('mouseover', handleMouseOverForSelectorModes);
@@ -593,6 +594,7 @@ export function ReflectFlowOverlay() {
         if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
       }
     } else {
+      document.body.classList.remove('reflectflow-inspect-mode-active');
       document.removeEventListener('mouseover', handleMouseOverForSelectorModes);
       document.removeEventListener('mouseout', handleMouseOutForSelectorModes);
       document.removeEventListener('keydown', handleKeyDown);
@@ -604,6 +606,7 @@ export function ReflectFlowOverlay() {
     }
 
     return () => {
+      document.body.classList.remove('reflectflow-inspect-mode-active');
       document.removeEventListener('mouseover', handleMouseOverForSelectorModes);
       document.removeEventListener('mouseout', handleMouseOutForSelectorModes);
       document.removeEventListener('keydown', handleKeyDown);
@@ -940,7 +943,7 @@ export function ReflectFlowOverlay() {
                   onClick={(e) => handleInspectIconClick(e, inspectIconTarget)}
                   title="Inspect Element"
               >
-                  <InspectIcon className="h-4 w-4 text-primary" /> {/* Changed TargetIcon to InspectIcon */}
+                  <InspectIcon className="h-4 w-4 text-primary" />
               </Button>
           );
       })()}

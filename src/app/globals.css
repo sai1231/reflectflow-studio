@@ -103,3 +103,8 @@ body {
     @apply bg-background text-foreground;
   }
 }
+
+/* Custom class for ReflectFlow element selector mode */
+body.reflectflow-inspect-mode-active {
+  cursor: crosshair;
+}
