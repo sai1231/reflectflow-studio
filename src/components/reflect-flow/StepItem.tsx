@@ -55,7 +55,7 @@ const getIconForStep = (type: Step['type']): React.ElementType => {
   switch (type) {
     case 'navigate': return NavigateIcon;
     case 'click': return ClickIcon;
-    case 'doubleClick': return DoubleClickIcon; // Make sure DoubleClickIcon is defined
+    case 'doubleClick': return DoubleClickIcon; 
     case 'type': return TypeActionIcon;
     case 'keyDown': return KeyboardIcon;
     case 'keyUp': return KeyboardIcon;
@@ -72,9 +72,9 @@ export function StepItem({ step, isSelected, initialExpanded = false, onSelect, 
   const [editableStep, setEditableStep] = useState<Step>(() => JSON.parse(JSON.stringify(step)));
   const [isExpanded, setIsExpanded] = useState(initialExpanded || step.type === 'undetermined');
   const [commandSearch, setCommandSearch] = useState('');
-  const [isCommandPopoverOpen, setIsCommandPopoverOpen] = useState(false); // Controlled by Popover
+  const [isCommandPopoverOpen, setIsCommandPopoverOpen] = useState(false);
   
-  const commandInputRef = useRef<HTMLInputElement>(null); // For input inside popover
+  const commandInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const newEditableStep = JSON.parse(JSON.stringify(step));
@@ -82,7 +82,6 @@ export function StepItem({ step, isSelected, initialExpanded = false, onSelect, 
         setIsExpanded(initialExpanded || newEditableStep.type === 'undetermined');
         setEditableStep(newEditableStep);
         setCommandSearch('');
-         // Don't auto-open popover here, user clicks button now
     } else if (editableStep.id === newEditableStep.id && editableStep.type !== 'undetermined' && newEditableStep.type === 'undetermined') {
         setEditableStep(newEditableStep);
         setIsExpanded(true);
@@ -197,7 +196,7 @@ export function StepItem({ step, isSelected, initialExpanded = false, onSelect, 
 
     setEditableStep(fullyTypedStep); 
     onUpdateStep(fullyTypedStep);   
-    setIsCommandPopoverOpen(false); // Close popover on selection
+    setIsCommandPopoverOpen(false);
     setCommandSearch('');
     if (fullyTypedStep.type !== 'undetermined') {
       onCommandSelected(fullyTypedStep.id); 
@@ -313,8 +312,8 @@ export function StepItem({ step, isSelected, initialExpanded = false, onSelect, 
             </Button>
         </PopoverTrigger>
         <PopoverContent 
-            className="w-[calc(var(--radix-popover-trigger-width))] p-0 z-[10001]" // Ensure width matches trigger
-            align="start" // Align with the start of the trigger
+            className="w-[calc(var(--radix-popover-trigger-width))] p-0 z-[10001]"
+            align="start" 
             onOpenAutoFocus={(e) => {
                 e.preventDefault();
                 commandInputRef.current?.focus();
@@ -323,29 +322,21 @@ export function StepItem({ step, isSelected, initialExpanded = false, onSelect, 
         >
             <Input
                 ref={commandInputRef}
-                data-command-input="true" // For potential global event handling if needed
+                data-command-input="true" 
                 placeholder="Type to search commands..."
                 value={commandSearch}
                 onChange={(e) => setCommandSearch(e.target.value)}
-                className="text-sm h-10 border-x-0 border-t-0 rounded-none focus-visible:ring-0" // Minimal styling for input in popover
+                className="text-sm h-10 border-x-0 border-t-0 rounded-none focus-visible:ring-0" 
             />
             <ScrollArea className="h-[200px]">
             {filteredCommands.length > 0 ? (
                 filteredCommands.map(cmd => (
                 <div
                     key={cmd.key}
-                    data-command-item="true" // For potential global event handling if needed
+                    data-command-item="true" 
                     className="p-2 hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground cursor-pointer text-sm outline-none"
-                    onClick={() => {
-                        handleCommandSelect(cmd);
-                        // setIsCommandPopoverOpen(false); // Popover's onOpenChange will handle this
-                    }}
-                    onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                            handleCommandSelect(cmd);
-                            // setIsCommandPopoverOpen(false);
-                        }
-                    }}
+                    onClick={() => handleCommandSelect(cmd)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') handleCommandSelect(cmd);}}
                     tabIndex={0} 
                 >
                     {cmd.description} <span className="text-xs text-muted-foreground">({cmd.key})</span>
@@ -362,16 +353,6 @@ export function StepItem({ step, isSelected, initialExpanded = false, onSelect, 
 
   const renderCommonFields = () => (
     <>
-      <div className="grid grid-cols-3 gap-2 items-center">
-        <Label htmlFor={`desc-${editableStep.id}`} className="text-xs col-span-1">Description</Label>
-        <Input
-          id={`desc-${editableStep.id}`}
-          placeholder="Description"
-          value={editableStep.description}
-          onChange={(e) => handleInputChange('description', e.target.value)}
-          className="text-sm h-8 col-span-2"
-        />
-      </div>
       {(editableStep.type !== 'navigate' && editableStep.type !== 'keyDown' && editableStep.type !== 'keyUp' && !(editableStep.type === 'scroll' && (editableStep as ScrollStep).selectors?.[0]?.toLowerCase() === 'document')) && (
         <>
           {(editableStep.selectors || ['']).map((sel, index) => (
@@ -385,7 +366,7 @@ export function StepItem({ step, isSelected, initialExpanded = false, onSelect, 
                   onChange={(e) => handleSelectorChange(index, e.target.value)}
                   className="text-sm h-8 flex-grow"
                 />
-                {(editableStep.selectors || []).length > 1 && index > 0 && (
+                {(editableStep.selectors || []).length > 1 && ( // Show remove only if more than one
                    <Button type="button" variant="ghost" size="icon" onClick={() => handleRemoveSelector(index)} className="h-7 w-7 p-0 flex-shrink-0" aria-label="Remove selector">
                     <DeleteIcon className="h-3 w-3" />
                   </Button>
@@ -584,11 +565,8 @@ export function StepItem({ step, isSelected, initialExpanded = false, onSelect, 
                   size="icon" 
                   className="h-8 w-8 flex-shrink-0" 
                   aria-label="More options"
-                  onClick={(e) => {
-                     e.stopPropagation(); // Prevents card's toggleExpand from firing
-                     // Add console log if needed: console.log('DropdownMenuTrigger clicked');
-                  }}
-                  onFocus={(e) => e.stopPropagation()} // Prevent focus events from bubbling
+                  onClick={(e) => e.stopPropagation()}
+                  onFocus={(e) => e.stopPropagation()} 
                 >
                   <MoreOptionsIcon className="h-4 w-4" />
                 </Button>
