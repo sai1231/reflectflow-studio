@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useCallback, useEffect, useRef } from 'react';
-import type { Step, UndeterminedStep, RecordingSession, ElementInfoForPopup, ClickStep } from '@/types';
+import type { Step, UndeterminedStep, RecordingSession, ClickStep } from '@/types';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { HeaderControls } from './HeaderControls';
@@ -14,6 +14,14 @@ import { FileIcon, TargetIcon, AddIcon } from './icons';
 import { CommandInfo, findCommandByKey, availableCommands } from '@/lib/commands';
 import { arrayMove } from '@dnd-kit/sortable';
 
+
+interface ElementInfoForPopup {
+  id?: string; // raw element id
+  cssSelectorForDisplay?: string; // for popup display
+  xpathForDisplay?: string; // for popup display
+  tagName?: string;
+  generatedSelectors: string[];
+}
 
 interface ElementDetails {
   element: HTMLElement;
@@ -28,42 +36,112 @@ const PANEL_MIN_TOP = 16;
 
 
 const generateElementInfo = (element: HTMLElement): ElementInfoForPopup => {
-  let id = element.id ? `#${CSS.escape(element.id)}` : undefined;
-  let cssSelector = `${element.tagName.toLowerCase()}`;
-  if (element.classList.length > 0) {
-    const significantClasses = Array.from(element.classList)
-      .filter(c => c.trim() !== '' && !/^(bg-|text-|border-|p-|m-|flex|grid|item|justify|self-|gap-|rounded|shadow-|w-|h-)/.test(c))
-      .map(c => CSS.escape(c));
-    if (significantClasses.length > 0) {
-      cssSelector += `.${significantClasses.join('.')}`;
-    } else {
-      const firstClass = Array.from(element.classList).find(c => c.trim() !== '');
-      if (firstClass) {
-        cssSelector += `.${CSS.escape(firstClass)}`;
-      }
+  const generatedSelectors: string[] = [];
+  const addUniqueSelector = (selector: string) => {
+    if (selector && !generatedSelectors.includes(selector) && generatedSelectors.length < 4) {
+      generatedSelectors.push(selector);
+    }
+  };
+
+  // 1. ID Selector
+  if (element.id) {
+    addUniqueSelector(`#${CSS.escape(element.id)}`);
+  }
+
+  // 2. Name attribute selector (CSS)
+  const nameAttr = element.getAttribute('name');
+  if (nameAttr) {
+    addUniqueSelector(`${element.tagName.toLowerCase()}[name="${CSS.escape(nameAttr)}"]`);
+  }
+
+  // 3. Data-testid attribute selector (CSS)
+  if (element.dataset.testid) {
+    addUniqueSelector(`${element.tagName.toLowerCase()}[data-testid="${CSS.escape(element.dataset.testid)}"]`);
+  }
+
+  // 4. Role and ARIA label CSS Selectors
+  const role = element.getAttribute('role');
+  const ariaLabel = element.getAttribute('aria-label');
+
+  if (role && ariaLabel) {
+    addUniqueSelector(`${element.tagName.toLowerCase()}[role="${CSS.escape(role)}"][aria-label="${CSS.escape(ariaLabel)}"]`);
+  } else if (role) {
+    addUniqueSelector(`${element.tagName.toLowerCase()}[role="${CSS.escape(role)}"]`);
+  } else if (ariaLabel) {
+    addUniqueSelector(`${element.tagName.toLowerCase()}[aria-label="${CSS.escape(ariaLabel)}"]`);
+  }
+  
+  // 5. XPath with specific attributes (ID, name, class, then text/aria-label)
+  let xpath = `//${element.tagName.toLowerCase()}`;
+  if (element.id) {
+    xpath = `//${element.tagName.toLowerCase()}[@id='${CSS.escape(element.id)}']`;
+  } else if (nameAttr) {
+      xpath = `//${element.tagName.toLowerCase()}[@name='${CSS.escape(nameAttr)}']`;
+  } else {
+    // Attempt to use significant class if no ID or name
+    const significantClassForXpath = Array.from(element.classList)
+      .find(c => !/^(bg-|text-|border-|p-|m-|flex|grid|item|justify|self-|gap-|rounded|shadow-|w-|h-)/.test(c) && c.trim() !== '');
+    if (significantClassForXpath) {
+        xpath += `[contains(@class, '${CSS.escape(significantClassForXpath)}')]`;
+    }
+
+    // Add text content or aria-label to XPath for more specificity if it's simple and no id/name was used for the base XPath
+    const textContent = element.textContent?.trim();
+    if (['button', 'a', 'span', 'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'div'].includes(element.tagName.toLowerCase()) && 
+        textContent && textContent.length > 0 && textContent.length < 50 && !element.children.length) {
+      xpath += `[normalize-space()="${textContent.replace(/"/g, "'")}"]`;
+    } else if (ariaLabel) {
+      xpath += `[@aria-label="${ariaLabel.replace(/"/g, "'")}"]`;
+    }
+  }
+  addUniqueSelector(xpath);
+
+  // 6. CSS Selector with classes
+  let classCssSelector = element.tagName.toLowerCase();
+  const significantClasses = Array.from(element.classList)
+    .filter(c => c.trim() !== '' && !/^(bg-|text-|border-|p-|m-|flex|grid|item|justify|self-|gap-|rounded|shadow-|w-|h-)/.test(c))
+    .map(c => CSS.escape(c));
+  
+  if (significantClasses.length > 0) {
+    classCssSelector += `.${significantClasses.join('.')}`;
+    addUniqueSelector(classCssSelector);
+  } else {
+    // If no "significant" classes, try with the first available class for a bit more specificity than just tag
+    const firstClass = Array.from(element.classList).find(c => c.trim() !== '');
+    if (firstClass) {
+      classCssSelector += `.${CSS.escape(firstClass)}`;
+      addUniqueSelector(classCssSelector);
     }
   }
 
-  let xpath = `//${element.tagName.toLowerCase()}`;
-  if (element.id) {
-    xpath += `[@id='${CSS.escape(element.id)}']`;
-  } else if (element.classList.length > 0) {
-      const significantClass = Array.from(element.classList).find(c => !c.startsWith('bg-') && !c.startsWith('text-') && !c.startsWith('p-') && !c.startsWith('m-') && c.trim() !== '');
-      if (significantClass) {
-          xpath += `[contains(@class, '${CSS.escape(significantClass)}')]`;
-      }
-  }
-  if (['button', 'a', 'span', 'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'div'].includes(element.tagName.toLowerCase()) && element.textContent && element.textContent.trim().length > 0 && element.textContent.trim().length < 50 && !element.children.length) {
-      xpath += `[normalize-space()="${element.textContent.trim().replace(/"/g, "'")}"]`;
-  } else if (element.getAttribute('aria-label')) {
-    xpath += `[@aria-label="${element.getAttribute('aria-label')?.replace(/"/g, "'")}"]`;
+  // 7. Basic TagName if still not enough selectors
+  if (generatedSelectors.length < 4 && !generatedSelectors.includes(element.tagName.toLowerCase())) {
+      addUniqueSelector(element.tagName.toLowerCase());
   }
 
+  // Ensure there's at least one selector, fallback to tagName if all else fails
+  if (generatedSelectors.length === 0) {
+    generatedSelectors.push(element.tagName.toLowerCase());
+  }
+
+  // Populate fields for display in popup
+  const idForDisplayRaw = element.id || undefined;
+  // Find a good CSS selector for display: prefer class-based, then ID, then tag
+  const cssSelectorForDisplay = 
+    generatedSelectors.find(s => s.includes('.') && !s.startsWith("//")) || // Class-based
+    generatedSelectors.find(s => s.startsWith("#")) || // ID
+    generatedSelectors.find(s => !s.startsWith("//") && !s.includes("[") && !s.includes(":")) || // Simple tag
+    generatedSelectors.find(s => !s.startsWith("//")) || // Any other CSS
+    element.tagName.toLowerCase();
+  
+  const xpathForDisplay = generatedSelectors.find(s => s.startsWith("//")) || `//${element.tagName.toLowerCase()}`;
+
   return {
-    id: element.id || undefined,
-    cssSelector: id || cssSelector,
-    xpath: xpath,
+    id: idForDisplayRaw,
+    cssSelectorForDisplay: cssSelectorForDisplay,
+    xpathForDisplay: xpathForDisplay,
     tagName: element.tagName.toLowerCase(),
+    generatedSelectors: generatedSelectors
   };
 };
 
@@ -112,11 +190,14 @@ export function ReflectFlowOverlay() {
     if (!isMounted || typeof window === 'undefined') return;
 
     const initialWidth = isPanelCollapsed ? PANEL_WIDTH_COLLAPSED : PANEL_WIDTH_EXPANDED;
-    setPanelPosition({
-      top: PANEL_MIN_TOP,
-      left: Math.max(PANEL_MIN_LEFT, window.innerWidth - initialWidth - PANEL_MIN_LEFT),
-    });
-  }, [isMounted, isPanelCollapsed]);
+    if (!panelPosition) { // Only set initial position if not already set (e.g. by dragging)
+      setPanelPosition({
+        top: PANEL_MIN_TOP,
+        left: Math.max(PANEL_MIN_LEFT, window.innerWidth - initialWidth - PANEL_MIN_LEFT),
+      });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isMounted, isPanelCollapsed]); // Removed panelPosition from dependencies to avoid re-calculating on drag
 
 
   const handleTogglePanelCollapse = useCallback(() => {
@@ -126,7 +207,7 @@ export function ReflectFlowOverlay() {
         const newWidth = newCollapsed ? PANEL_WIDTH_COLLAPSED : PANEL_WIDTH_EXPANDED;
 
         setPanelPosition(currentPos => {
-            if (!currentPos) return null; // Should not happen if mounted
+            if (!currentPos) return null; 
             let newLeft = currentPos.left;
             if (typeof window !== 'undefined') {
                 if (currentPos.left + oldWidth >= window.innerWidth - PANEL_MIN_LEFT - 20) {
@@ -173,7 +254,7 @@ export function ReflectFlowOverlay() {
     if ((event.target as HTMLElement).closest('button, input, [role="button"], [role="menuitem"], [role="option"], [data-command-input="true"], [data-command-item="true"], textarea, [aria-label~="Drag"]')) {
         return;
     }
-    if (!currentPanelPositionRef.current) return; // Guard against null position
+    if (!currentPanelPositionRef.current) return; 
 
     event.preventDefault();
     setIsDragging(true);
@@ -216,19 +297,13 @@ export function ReflectFlowOverlay() {
         return;
     }
 
-    let currentSelectors: string[] = [''];
-    let currentSelector: string = '';
+    let currentGeneratedSelectors: string[] = [''];
+    let currentPrimarySelector: string = '';
 
     if (targetElement && commandInfo.isElementCommand) {
         const elementInfo = generateElementInfo(targetElement);
-        const selectors: string[] = [];
-        if (elementInfo.id) selectors.push(elementInfo.id);
-        if (elementInfo.cssSelector && elementInfo.cssSelector !== elementInfo.id) selectors.push(elementInfo.cssSelector);
-        if (elementInfo.xpath && !selectors.includes(elementInfo.xpath)) selectors.push(elementInfo.xpath);
-        if (selectors.length === 0 && elementInfo.tagName) selectors.push(elementInfo.tagName);
-        else if (selectors.length === 0) selectors.push('unknown');
-        currentSelectors = selectors;
-        currentSelector = selectors[0] || 'N/A';
+        currentGeneratedSelectors = elementInfo.generatedSelectors;
+        currentPrimarySelector = elementInfo.generatedSelectors[0] || 'N/A';
     }
 
 
@@ -238,8 +313,8 @@ export function ReflectFlowOverlay() {
         commandKey: commandInfo.key,
         badgeLabel: commandInfo.badgeLabel,
         description: commandInfo.description,
-        selectors: commandInfo.isElementCommand ? currentSelectors : undefined,
-        selector: commandInfo.isElementCommand ? currentSelector : undefined,
+        selectors: commandInfo.isElementCommand ? currentGeneratedSelectors : undefined,
+        selector: commandInfo.isElementCommand ? currentPrimarySelector : undefined,
         target: 'main', 
         timeout: 5000,
         ...(commandInfo.defaultParams || {}),
@@ -249,8 +324,8 @@ export function ReflectFlowOverlay() {
 
     setRecordedSteps(prevSteps => [...prevSteps, newStep]);
     let toastDesc = `Recorded: ${commandInfo.badgeLabel}`;
-    if (commandInfo.isElementCommand && currentSelector && currentSelector !== 'N/A') {
-        toastDesc += ` on ${currentSelector}`;
+    if (commandInfo.isElementCommand && currentPrimarySelector && currentPrimarySelector !== 'N/A') {
+        toastDesc += ` on ${currentPrimarySelector}`;
     } else if (params.url) {
         toastDesc += ` to ${params.url}`;
     } else if (params.key) {
@@ -261,7 +336,7 @@ export function ReflectFlowOverlay() {
         toastDesc += ` option "${String(params.visibleText).substring(0,20)}${String(params.visibleText).length > 20 ? '...' : ''}"`;
     }
     toast({ title: "Action Recorded", description: toastDesc });
-  }, [toast, setRecordedSteps]);
+  }, [toast]);
 
 
   const checkUrlChangeAfterDelay = useCallback(() => {
@@ -290,13 +365,6 @@ export function ReflectFlowOverlay() {
     }
     
     const elementInfo = generateElementInfo(target);
-    const selectors: string[] = [];
-    if (elementInfo.id) selectors.push(elementInfo.id);
-    if (elementInfo.cssSelector && elementInfo.cssSelector !== elementInfo.id) selectors.push(elementInfo.cssSelector);
-    if (elementInfo.xpath && !selectors.includes(elementInfo.xpath)) selectors.push(elementInfo.xpath);
-    if (selectors.length === 0) selectors.push(elementInfo.tagName || 'unknown');
-
-    const primarySelector = selectors[0] || 'N/A';
     const commandInfo = findCommandByKey('click')!;
 
     const newStep: Step = {
@@ -305,28 +373,30 @@ export function ReflectFlowOverlay() {
       commandKey: commandInfo.key,
       badgeLabel: commandInfo.badgeLabel,
       description: commandInfo.description,
-      selectors: selectors,
-      selector: primarySelector,
+      selectors: elementInfo.generatedSelectors,
+      selector: elementInfo.generatedSelectors[0] || 'N/A',
       target: 'main',
       timeout: 5000,
       ...(commandInfo.defaultParams as Partial<ClickStep> || {})
     };
 
     setRecordedSteps(prevSteps => [...prevSteps, newStep]);
-    toast({ title: "Action Recorded", description: `Recorded: Click on ${primarySelector}` });
+    toast({ title: "Action Recorded", description: `Recorded: Click on ${elementInfo.generatedSelectors[0] || 'N/A'}` });
     checkUrlChangeAfterDelay();
-  }, [toast, isElementSelectorActive, isRecording, isElementContextMenuOpen, checkUrlChangeAfterDelay, setRecordedSteps]);
+  }, [isElementSelectorActive, isRecording, isElementContextMenuOpen, checkUrlChangeAfterDelay, toast]);
 
 
   const handleFocusIn = useCallback((event: FocusEvent) => {
+    if (!isRecording) return;
     if (panelCardRef.current && panelCardRef.current.contains(event.target as Node)) return;
     const target = event.target as HTMLElement;
     if (target.matches('input[type="text"], input[type="password"], input[type="email"], input[type="search"], input[type="url"], input[type="tel"], input[type="number"], textarea')) {
         setFocusedElementInfo({ element: target, initialValue: (target as HTMLInputElement | HTMLTextAreaElement).value });
     }
-  }, []);
+  }, [isRecording]);
 
   const handleFocusOut = useCallback((event: FocusEvent) => {
+    if (!isRecording) return;
     if (panelCardRef.current && panelCardRef.current.contains(event.target as Node)) return;
     if (focusedElementInfo && event.target === focusedElementInfo.element) {
         const currentValue = (focusedElementInfo.element as HTMLInputElement | HTMLTextAreaElement).value;
@@ -335,9 +405,10 @@ export function ReflectFlowOverlay() {
         }
         setFocusedElementInfo(null);
     }
-  }, [focusedElementInfo, addNewStep]);
+  }, [isRecording, focusedElementInfo, addNewStep]);
 
   const handleChangeEvent = useCallback((event: Event) => {
+    if (!isRecording) return;
     if (panelCardRef.current && panelCardRef.current.contains(event.target as Node)) return;
     const target = event.target as HTMLSelectElement;
     if (target.tagName === 'SELECT') {
@@ -346,9 +417,10 @@ export function ReflectFlowOverlay() {
             addNewStep('selectByVisibleText', target, { visibleText: selectedOption.text });
         }
     }
-  }, [addNewStep]);
+  }, [isRecording, addNewStep]);
 
   const handleGeneralKeyDown = useCallback((event: KeyboardEvent) => {
+    if (!isRecording) return;
     const activeElement = document.activeElement as HTMLElement;
     if (panelCardRef.current && panelCardRef.current.contains(activeElement)) return;
 
@@ -361,14 +433,15 @@ export function ReflectFlowOverlay() {
     if (['Enter', 'Tab', 'Escape'].includes(event.key)) {
         addNewStep('keyDown', document.activeElement instanceof HTMLElement ? document.activeElement : null, { key: event.key });
     }
-  }, [addNewStep]);
+  }, [isRecording, addNewStep]);
 
   const handlePopState = useCallback(() => {
+    if (!isRecording) return;
     if (typeof window !== 'undefined' && window.location.href !== previousUrlRef.current) {
         addNewStep('navigate', null, { url: window.location.href });
         previousUrlRef.current = window.location.href;
     }
-  }, [addNewStep]);
+  }, [isRecording, addNewStep]);
 
 
   useEffect(() => {
@@ -536,21 +609,8 @@ export function ReflectFlowOverlay() {
       return;
     }
 
-    const allSelectors: string[] = [];
-    if (targetElementInfo.id) allSelectors.push(targetElementInfo.id);
-    if (targetElementInfo.cssSelector && targetElementInfo.cssSelector !== targetElementInfo.id) {
-        allSelectors.push(targetElementInfo.cssSelector);
-    }
-    if (targetElementInfo.xpath && !allSelectors.includes(targetElementInfo.xpath)) {
-        allSelectors.push(targetElementInfo.xpath);
-    }
-    if (allSelectors.length === 0 && targetElementInfo.tagName) {
-        allSelectors.push(targetElementInfo.tagName);
-    } else if (allSelectors.length === 0) {
-        allSelectors.push('N/A');
-    }
-
-    const primarySelector = allSelectors[0];
+    const allGeneratedSelectors: string[] = targetElementInfo.generatedSelectors;
+    const primarySelector = allGeneratedSelectors[0] || 'N/A';
     const baseId = String(Date.now()) + Math.random().toString(36).substring(2,7);
 
     let newStepData: Partial<Step> = {
@@ -558,7 +618,7 @@ export function ReflectFlowOverlay() {
       commandKey: commandInfo.key,
       badgeLabel: commandInfo.badgeLabel,
       description: commandInfo.description,
-      selectors: commandInfo.isElementCommand ? allSelectors : undefined,
+      selectors: commandInfo.isElementCommand ? allGeneratedSelectors : undefined,
       selector: commandInfo.isElementCommand ? primarySelector : undefined,
       target: 'main',
       timeout: 5000,
@@ -593,7 +653,7 @@ export function ReflectFlowOverlay() {
     toast({ title: "Step Added", description: `${commandInfo.badgeLabel} step added for ${primarySelector}.` });
     setNewlyAddedStepId(newStep.id!);
     closeElementContextMenu();
-  }, [toast, closeElementContextMenu, setRecordedSteps]);
+  }, [toast, closeElementContextMenu]);
 
   const handleAddManualStep = useCallback(() => {
     const baseId = String(Date.now()) + Math.random().toString(36).substring(2, 7);
@@ -604,13 +664,13 @@ export function ReflectFlowOverlay() {
         description: 'New Step - Choose Command',
         target: 'main',
         timeout: 5000,
-        selectors: [''],
+        selectors: [''], // Initialize with one empty selector
         selector: ''
     };
     setRecordedSteps(prev => [...prev, newStep]);
     setNewlyAddedStepId(newStep.id);
     toast({ title: "New Step Added", description: "Choose a command for the new step." });
-  }, [toast, setRecordedSteps]);
+  }, [toast]);
 
 
   const handleSaveSession = useCallback(() => {
@@ -636,7 +696,7 @@ export function ReflectFlowOverlay() {
       console.error("Error saving session to localStorage:", error);
       toast({ title: "Save Error", description: "Could not save session to Local Storage. See console.", variant: "destructive" });
     }
-  }, [toast, recordedSteps]);
+  }, [recordedSteps, toast]);
 
   const handleExportSession = useCallback(() => {
     if (typeof window === 'undefined') return;
@@ -666,7 +726,7 @@ export function ReflectFlowOverlay() {
     URL.revokeObjectURL(href);
 
     toast({ title: "Session Exported", description: "Session data downloaded as JSON file." });
-  }, [toast, recordedSteps]);
+  }, [recordedSteps, toast]);
 
 
   const handleUpdateStep = useCallback((updatedStep: Step) => {
@@ -678,12 +738,12 @@ export function ReflectFlowOverlay() {
     if (newlyAddedStepId === updatedStep.id && updatedStep.type !== 'undetermined') {
         setNewlyAddedStepId(null);
     }
-  }, [toast, newlyAddedStepId, setRecordedSteps]);
+  }, [newlyAddedStepId, toast]);
 
   const handleDeleteStep = useCallback((id: string) => {
     setRecordedSteps(prev => prev.filter(s => s.id !== id));
     toast({ title: "Step Deleted", description: "The step has been removed." });
-  }, [toast, setRecordedSteps]);
+  }, [toast]);
 
   const handleReorderSteps = useCallback((oldIndex: number, newIndex: number) => {
     setRecordedSteps((prevSteps) => {
@@ -693,7 +753,7 @@ export function ReflectFlowOverlay() {
       return prevSteps;
     });
     toast({ title: "Steps Reordered", description: "The order of the steps has been updated." });
-  }, [toast, setRecordedSteps]);
+  }, [toast]);
 
   const panelWidthClass = isPanelCollapsed ? `w-[${PANEL_WIDTH_COLLAPSED}px]` : `w-[${PANEL_WIDTH_EXPANDED}px]`;
 
@@ -746,7 +806,7 @@ export function ReflectFlowOverlay() {
         </CardHeader>
         {!isPanelCollapsed && (
           <>
-            <CardContent className="flex-1 flex flex-col min-h-0 overflow-hidden p-0 relative">
+            <CardContent className="flex-1 min-h-0 overflow-hidden p-0 relative">
               <StepList
                 steps={recordedSteps}
                 onUpdateStep={handleUpdateStep}
