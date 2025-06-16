@@ -11,7 +11,8 @@ import {
   DropdownMenuSub,
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
-  DropdownMenuPortal
+  DropdownMenuPortal,
+  DropdownMenuTrigger // Added missing import
 } from "@/components/ui/dropdown-menu";
 import { availableCommands, type CommandInfo } from '@/lib/commands';
 import {
@@ -63,16 +64,18 @@ const getIconForCommandKey = (key: string): React.ElementType => {
   switch (key) {
     case 'click': return ClickIcon;
     case 'doubleClick': return DoubleClickIcon;
-    case 'setValue': case 'addValue': case 'clearValue': return TypeActionIcon;
+    case 'setValue': return TypeActionIcon;
+    case 'addValue': return AddValueIcon;
+    case 'clearValue': return ClearValueIcon;
     case 'scrollIntoView': return ScrollIcon;
     case 'moveTo': return MoveToIcon;
     case 'dragAndDrop': return HandIcon;
     case 'touchAction': return HandIcon;
 
     case 'getAttribute': return GetAttributeIcon;
-    case 'getCSSProperty': return GetPropertyIcon; // Re-use
-    case 'getComputedLabel': return Sigma; // Placeholder
-    case 'getComputedRole': return Sigma; // Placeholder
+    case 'getCSSProperty': return GetPropertyIcon; 
+    case 'getComputedLabel': return Sigma; 
+    case 'getComputedRole': return Sigma; 
     case 'getElement': return IsExistingIcon;
     case 'getElements': return IsExistingIcon;
     case 'getHTML': return FileCodeIcon;
@@ -81,18 +84,18 @@ const getIconForCommandKey = (key: string): React.ElementType => {
     case 'getSize': return GetSizeIcon;
     case 'getTagName': return TagsIcon;
     case 'getText': return GetTextIcon;
-    case 'getValue': return TypeActionIcon; // Similar to typing/setting
+    case 'getValue': return TypeActionIcon; 
     case 'isClickable': return ClickIcon;
     case 'isDisplayed': return ViewIcon;
     case 'isEnabled': return IsEnabledIcon;
     case 'isEqual': return ChevronsUpDownIcon;
     case 'isExisting': return IsExistingIcon;
     case 'isFocused': return CheckCircle2;
-    case 'isSelected': return CheckCircle2; // Re-use
+    case 'isSelected': return CheckCircle2; 
     case 'isStable': return PlayIcon;
-    case 'nextElement': return Sigma; // Placeholder
-    case 'parentElement': return Sigma; // Placeholder
-    case 'previousElement': return Sigma; // Placeholder
+    case 'nextElement': return Sigma; 
+    case 'parentElement': return Sigma; 
+    case 'previousElement': return Sigma; 
     
     case 'selectByAttribute': case 'selectByIndex': case 'selectByVisibleText': return ListChecksIcon;
 
@@ -105,7 +108,7 @@ const getIconForCommandKey = (key: string): React.ElementType => {
   }
 };
 
-// Categorize commands
+// Categorize commands based on their purpose or type of interaction
 const elementCommands = availableCommands.filter(cmd => cmd.isElementCommand);
 
 const actionCommands = elementCommands.filter(cmd =>
@@ -210,4 +213,3 @@ export function ElementHoverPopup({ elementInfo, isOpen, onCommandSelected, posi
     </DropdownMenu>
   );
 }
-
