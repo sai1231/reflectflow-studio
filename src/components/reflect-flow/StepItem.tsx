@@ -21,7 +21,7 @@ import {
   TypeActionIcon,
   NavigateIcon,
   ScrollIcon,
-  AssertIcon,
+  AssertIcon, // Generic assertion/wait icon
   DeleteIcon,
   SaveIcon,
   DragHandleIcon,
@@ -30,16 +30,16 @@ import {
   ChevronUpIcon,
   KeyboardIcon,
   MoveToIcon,
-  ActionIcon,
-  HelpCircleIcon,
-  FileCodeIcon,
-  SaveScreenshotIcon, // Changed from CameraIcon
-  HandIcon,
-  PauseCircleIcon,
-  BugIcon,
-  ChevronsUpDownIcon,
-  ListChecksIcon,
-  WatchIcon,
+  ActionIcon, // Generic fallback icon
+  HelpCircleIcon, // For undetermined steps
+  FileCodeIcon, // For executeScript
+  SaveScreenshotIcon,
+  HandIcon, // For dragAndDrop, touchAction
+  PauseCircleIcon, // For Pause step
+  BugIcon, // For Debug step
+  ChevronsUpDownIcon, // For combobox trigger and isEqual
+  ListChecksIcon, // For selectOption
+  WatchIcon, // For waitUntil
 } from './icons';
 import {
   DropdownMenu,
@@ -62,23 +62,23 @@ const getIconForStep = (type: StepType): React.ElementType => {
   switch (type) {
     case 'navigate': return NavigateIcon;
     case 'click': return ClickIcon;
-    case 'doubleClick': return ClickIcon; // DoubleClickIcon could be distinct if available/needed
+    case 'doubleClick': return ClickIcon; // Or a specific DoubleClickIcon if available
     case 'type': return TypeActionIcon;
     case 'keyDown': case 'keyUp': return KeyboardIcon;
     case 'scroll': return ScrollIcon;
-    case 'waitForElement': return AssertIcon;
+    case 'waitForElement': return AssertIcon; // Generic for waits/assertions
     case 'moveTo': return MoveToIcon;
     case 'dragAndDrop': return HandIcon;
     case 'executeScript': return FileCodeIcon;
-    case 'isEqual': return ChevronsUpDownIcon;
-    case 'saveScreenshot': return SaveScreenshotIcon; // Changed from CameraIcon
+    case 'isEqual': return ChevronsUpDownIcon; // Or a specific icon for comparison
+    case 'saveScreenshot': return SaveScreenshotIcon;
     case 'selectOption': return ListChecksIcon;
     case 'touchAction': return HandIcon;
     case 'waitUntil': return WatchIcon;
     case 'pause': return PauseCircleIcon;
     case 'debug': return BugIcon;
     case 'undetermined': return HelpCircleIcon;
-    default: return ActionIcon;
+    default: return ActionIcon; // Fallback
   }
 };
 
@@ -86,23 +86,26 @@ interface ParamDefinition {
   name: string;
   type: 'string' | 'number' | 'boolean' | 'object' | 'array' | 'function' | 'string | function' | 'string | object | Array<object>' | 'string | WebdriverIO.Element' ;
   isOptional: boolean;
-  fullDefinition: string;
+  fullDefinition: string; // Original definition like "value: string"
 }
 
+// Parses "name: type" string into a more usable object
 const parseParamDefinition = (def: string, isOptional: boolean): ParamDefinition => {
-  const [namePart, typePart] = def.split(':').map(s => s.trim());
-  let type: ParamDefinition['type'] = 'string';
-  const cleanTypePart = typePart?.toLowerCase() || '';
+  const [namePart, typePartWithRest] = def.split(':').map(s => s.trim());
+  const typePart = typePartWithRest?.split(' ')[0] || 'string'; // Take only the first word as type for simplicity
 
-  if (cleanTypePart.includes('number')) type = 'number';
-  else if (cleanTypePart.includes('boolean')) type = 'boolean';
-  else if (cleanTypePart.includes('object') || cleanTypePart.includes('element')) type = 'object'; // Broader category for textarea
-  else if (cleanTypePart.includes('[]') || cleanTypePart.includes('array')) type = 'array'; // Broader category for textarea
-  else if (cleanTypePart.includes('function')) type = 'function'; // Broader category for textarea
-  else type = 'string';
+  let resolvedType: ParamDefinition['type'] = 'string';
+  const cleanTypePart = typePart.toLowerCase();
+
+  if (cleanTypePart.includes('number')) resolvedType = 'number';
+  else if (cleanTypePart.includes('boolean')) resolvedType = 'boolean';
+  else if (cleanTypePart.includes('object') || cleanTypePart.includes('element') || cleanTypePart.includes('array<object>')) resolvedType = 'object'; // Broader category for textarea (JSON)
+  else if (cleanTypePart.includes('[]') || cleanTypePart.includes('array')) resolvedType = 'array'; // Broader category for textarea (JSON)
+  else if (cleanTypePart.includes('function')) resolvedType = 'function'; // Broader category for textarea (script)
+  else resolvedType = 'string';
 
 
-  return { name: namePart.replace('...', '').replace('?', ''), type, isOptional, fullDefinition: def };
+  return { name: namePart.replace('...', '').replace('?', ''), type: resolvedType, isOptional, fullDefinition: def };
 };
 
 
@@ -112,7 +115,7 @@ export function StepItem({ step, isSelected, initialExpanded = false, onSelect, 
   const [commandSearch, setCommandSearch] = useState('');
   const [isCommandPopoverOpen, setIsCommandPopoverOpen] = useState(false);
 
-  const commandInputRef = useRef<HTMLInputElement>(null);
+  const commandInputRef = useRef<HTMLInputElement>(null); // For search input inside popover
 
   const currentStepCommandInfo = useMemo(() => {
     if (editableStep.type === 'undetermined' || !editableStep.commandKey) return undefined;
@@ -128,9 +131,9 @@ export function StepItem({ step, isSelected, initialExpanded = false, onSelect, 
     setEditableStep(newEditableStep);
     if (newEditableStep.type === 'undetermined') {
         setCommandSearch('');
-        if (initialExpanded) { // If it's a new undetermined step, open popover
-             // setIsCommandPopoverOpen(true); // This might be too aggressive, consider button click
-        }
+         if (initialExpanded) {
+            // setTimeout(() => setIsCommandPopoverOpen(true), 0); // Open popover for new undetermined steps
+         }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step, initialExpanded]);
@@ -141,7 +144,8 @@ export function StepItem({ step, isSelected, initialExpanded = false, onSelect, 
     if (!commandSearch) return availableCommands;
     return availableCommands.filter(cmd =>
       cmd.description.toLowerCase().includes(commandSearch.toLowerCase()) ||
-      cmd.key.toLowerCase().includes(commandSearch.toLowerCase())
+      cmd.key.toLowerCase().includes(commandSearch.toLowerCase()) ||
+      cmd.badgeLabel.toLowerCase().includes(commandSearch.toLowerCase())
     );
   }, [commandSearch]);
 
@@ -152,38 +156,35 @@ export function StepItem({ step, isSelected, initialExpanded = false, onSelect, 
     let newStepData: Partial<Step> = {
       type: selectedCmd.mapsToStepType,
       commandKey: selectedCmd.key,
-      description: selectedCmd.description, // Set description from command
+      badgeLabel: selectedCmd.badgeLabel,
+      description: selectedCmd.description,
       selectors: selectedCmd.isElementCommand ? baseSelectors : undefined,
       selector: selectedCmd.isElementCommand ? baseSelector : undefined,
       target: editableStep.target || 'main',
       timeout: editableStep.timeout || 5000,
-      ...(selectedCmd.defaultParams || {})
+      ...(selectedCmd.defaultParams || {}) // Apply command-specific defaults
     };
     
-    // Initialize required and optional params with default values
+    // Initialize required and optional params with default values based on their types
     const allParams = [...selectedCmd.requiredParams, ...selectedCmd.optionalParams];
-    allParams.forEach(paramDef => {
-      const parsed = parseParamDefinition(paramDef, selectedCmd.optionalParams.includes(paramDef));
-      if (!(parsed.name in newStepData)) {
-        switch (parsed.type) {
+    allParams.forEach(paramDefString => {
+      const parsedParam = parseParamDefinition(paramDefString, selectedCmd.optionalParams.includes(paramDefString));
+      if (!(parsedParam.name in newStepData)) { // Only if not already set by defaultParams
+        switch (parsedParam.type) {
           case 'string':
-          case 'object':
-          case 'array':
-          case 'function':
-            (newStepData as any)[parsed.name] = ''; break;
-          case 'number': (newStepData as any)[parsed.name] = 0; break;
-          case 'boolean': (newStepData as any)[parsed.name] = false; break;
+          case 'object': // Represented as string (JSON/script)
+          case 'array':  // Represented as string (JSON)
+          case 'function': // Represented as string (script)
+            (newStepData as any)[parsedParam.name] = ''; break;
+          case 'number': (newStepData as any)[parsedParam.name] = 0; break;
+          case 'boolean': (newStepData as any)[parsedParam.name] = false; break;
+          default: (newStepData as any)[parsedParam.name] = ''; // Fallback for complex types
         }
       }
     });
     
-    // Specific handling from command's defaultParams (might override above)
-    // Example: clearValue should set value to ''
-    if (selectedCmd.defaultParams) {
-        newStepData = { ...newStepData, ...selectedCmd.defaultParams };
-    }
-
-    // Example for getAttribute/getCSSProperty if not covered by defaultParams
+    // Specific logic for certain commands based on their defaultParams or nature
+    // (e.g., setting 'property' for getAttribute/getCSSProperty if needed)
     if (selectedCmd.key === 'getAttribute' && (newStepData as WaitForElementStep).attributeName) {
        (newStepData as WaitForElementStep).property = `attribute:${(newStepData as WaitForElementStep).attributeName}`;
     } else if (selectedCmd.key === 'getCSSProperty' && (newStepData as WaitForElementStep).cssProperty) {
@@ -194,18 +195,18 @@ export function StepItem({ step, isSelected, initialExpanded = false, onSelect, 
 
 
     const fullyTypedStep = {
-      ...editableStep,
+      ...editableStep, // Keep existing id, etc.
       ...newStepData,
     } as Step;
 
 
     setEditableStep(fullyTypedStep);
-    onUpdateStep(fullyTypedStep);
+    onUpdateStep(fullyTypedStep); // Save immediately after command selection
     setIsCommandPopoverOpen(false);
     setCommandSearch('');
     if (fullyTypedStep.type !== 'undetermined') {
-      onCommandSelected(fullyTypedStep.id);
-      setIsExpanded(true);
+      onCommandSelected(fullyTypedStep.id); // Notify parent that command has been determined
+      setIsExpanded(true); // Ensure expanded to show new fields
     }
   };
 
@@ -214,7 +215,7 @@ export function StepItem({ step, isSelected, initialExpanded = false, onSelect, 
   };
 
   const handleNumericInputChange = (field: keyof Step | string, value: string) => {
-    const numValue = value === '' ? undefined : parseFloat(value);
+    const numValue = value === '' ? undefined : parseFloat(value); // Allow clearing to undefined or use 0
     setEditableStep(prev => ({ ...prev, [field]: numValue } as Step));
   };
   
@@ -224,43 +225,47 @@ export function StepItem({ step, isSelected, initialExpanded = false, onSelect, 
 
   const handleSelectorChange = (index: number, value: string) => {
     setEditableStep(prev => {
-      const newSelectors = [...(prev.selectors || [])];
+      const newSelectors = [...(prev.selectors || [''])]; // Ensure at least one selector string
       if (index < newSelectors.length) {
         newSelectors[index] = value;
       } else if (index === newSelectors.length) {
         newSelectors.push(value);
       }
       const primarySelector = newSelectors[0] || '';
-      return { ...prev, selectors: newSelectors, selector: primarySelector };
+      return { ...prev, selectors: newSelectors, selector: primarySelector } as Step;
     });
   };
 
   const handleAddSelector = () => {
     setEditableStep(prev => {
       const newSelectors = [...(prev.selectors || []), ''];
-      return { ...prev, selectors: newSelectors };
+      return { ...prev, selectors: newSelectors } as Step;
     });
   };
 
   const handleRemoveSelector = (index: number) => {
     setEditableStep(prev => {
       const newSelectors = [...(prev.selectors || [])];
-      if (newSelectors.length > 1 && index < newSelectors.length) {
+      if (newSelectors.length > 1 && index < newSelectors.length) { // Ensure at least one selector remains
         newSelectors.splice(index, 1);
+      } else if (newSelectors.length === 1 && index === 0) {
+        newSelectors[0] = ''; // Clear the last selector instead of removing it
       }
       const primarySelector = newSelectors[0] || '';
-      return { ...prev, selectors: newSelectors, selector: primarySelector };
+      return { ...prev, selectors: newSelectors, selector: primarySelector } as Step;
     });
   };
 
   const handleSaveChanges = () => {
     let finalStep = { ...editableStep };
+    // Ensure primary selector is synced if selectors array is used
     if (finalStep.selectors && finalStep.selectors.length > 0) {
       finalStep.selector = finalStep.selectors[0];
     } else if (finalStep.selector && (!finalStep.selectors || finalStep.selectors.length === 0)) {
       finalStep.selectors = [finalStep.selector];
     }
-    // Update property for specific get commands if not already set by handleCommandSelect
+
+    // Example of specific logic that might need to be here if not handled by defaultParams
     if (finalStep.commandKey === 'getAttribute' && (finalStep as WaitForElementStep).attributeName && !(finalStep as WaitForElementStep).property?.startsWith('attribute:')) {
        (finalStep as WaitForElementStep).property = `attribute:${(finalStep as WaitForElementStep).attributeName}`;
     } else if (finalStep.commandKey === 'getCSSProperty' && (finalStep as WaitForElementStep).cssProperty && !(finalStep as WaitForElementStep).property?.startsWith('css:')) {
@@ -285,7 +290,7 @@ export function StepItem({ step, isSelected, initialExpanded = false, onSelect, 
     if (s.type === 'undetermined') return <p className="text-xs text-muted-foreground truncate">Choose a command to define this step.</p>;
 
     const primarySelectorDisplay = s.selector || (s.selectors && s.selectors[0]) || '';
-    let summaryText = s.description || s.type; // Fallback to type if description is empty
+    let summaryText = s.description || s.badgeLabel || s.type; // Fallback to type if description/badgeLabel is empty
 
     if (s.type === 'navigate' && 'url' in s) summaryText = `Navigate to: ${s.url || '...'}`;
     else if (s.type === 'type' && 'value' in s) summaryText = `Type: "${s.value || '...'}" into ${primarySelectorDisplay || 'element'}`;
@@ -308,7 +313,8 @@ export function StepItem({ step, isSelected, initialExpanded = false, onSelect, 
             aria-expanded={isCommandPopoverOpen}
             className="w-full justify-between text-sm h-10"
           >
-            {editableStep.description && editableStep.type !== 'undetermined' ? editableStep.description : "Select command..."}
+            {editableStep.description && editableStep.type !== 'undetermined' ? 
+             (editableStep.badgeLabel || editableStep.description) : "Select command..."}
             <ChevronsUpDownIcon className="ml-2 h-4 w-4 shrink-0 opacity-50" />
           </Button>
         </PopoverTrigger>
@@ -319,7 +325,7 @@ export function StepItem({ step, isSelected, initialExpanded = false, onSelect, 
             e.preventDefault();
             commandInputRef.current?.focus();
           }}
-          onCloseAutoFocus={(e) => e.preventDefault()}
+          onCloseAutoFocus={(e) => e.preventDefault()} // Keep focus on trigger or intended element
         >
           <Input
             ref={commandInputRef}
@@ -337,10 +343,10 @@ export function StepItem({ step, isSelected, initialExpanded = false, onSelect, 
                   data-command-item="true"
                   className="p-2 hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground cursor-pointer text-sm outline-none"
                   onClick={() => handleCommandSelect(cmd)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') handleCommandSelect(cmd); }}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleCommandSelect(cmd); }}
                   tabIndex={0}
                 >
-                  {cmd.description} <span className="text-xs text-muted-foreground">({cmd.key})</span>
+                  {cmd.badgeLabel} <span className="text-xs text-muted-foreground">({cmd.description})</span>
                 </div>
               ))
             ) : (
@@ -360,15 +366,37 @@ export function StepItem({ step, isSelected, initialExpanded = false, onSelect, 
       ...currentStepCommandInfo.optionalParams.map(p => parseParamDefinition(p, true))
     ];
 
+    if (paramsToRender.length === 0 && !currentStepCommandInfo.isElementCommand) {
+        return <p className="text-xs text-muted-foreground py-2">This command requires no additional parameters.</p>;
+    }
+    if (paramsToRender.length === 0 && currentStepCommandInfo.isElementCommand && (!editableStep.selectors || editableStep.selectors.length === 0 || editableStep.selectors[0] === '')) {
+      // If it's an element command with no specific params other than selector, and selector is empty, prompt for selector.
+      // The selector field itself is handled by renderEditableFields general structure.
+    }
+
+
     return paramsToRender.map(param => {
       const paramValue = (editableStep as any)[param.name];
+      // Capitalize first letter of param name and add asterisk for required params
       const labelText = `${param.name.charAt(0).toUpperCase() + param.name.slice(1)}${param.isOptional ? '' : '*'}:`;
+      const placeholder = `Enter ${param.name}`;
 
       return (
         <div key={param.name} className="grid grid-cols-3 gap-2 items-center">
-          <Label htmlFor={`${editableStep.id}-${param.name}`} className="text-xs" title={param.fullDefinition}>
-            {labelText}
-          </Label>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Label htmlFor={`${editableStep.id}-${param.name}`} className="text-xs cursor-help">
+                  {labelText}
+                </Label>
+              </TooltipTrigger>
+              <TooltipContent side="left" className="max-w-xs">
+                <p className="text-xs">{param.fullDefinition}</p>
+                {param.type === 'object' || param.type === 'array' || param.type === 'function' ? 
+                 <p className="text-xs mt-1">For objects/arrays, use JSON. For functions, write script body.</p> : null}
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
           <div className="col-span-2">
             {param.type === 'boolean' ? (
               <Checkbox
@@ -380,7 +408,7 @@ export function StepItem({ step, isSelected, initialExpanded = false, onSelect, 
               <Input
                 id={`${editableStep.id}-${param.name}`}
                 type="number"
-                placeholder={`Enter ${param.name}`}
+                placeholder={placeholder}
                 value={paramValue !== undefined ? String(paramValue) : ''}
                 onChange={(e) => handleNumericInputChange(param.name, e.target.value)}
                 className="text-sm h-8"
@@ -388,17 +416,17 @@ export function StepItem({ step, isSelected, initialExpanded = false, onSelect, 
             ) : (param.type === 'object' || param.type === 'array' || param.type === 'function') ? (
                <Textarea
                 id={`${editableStep.id}-${param.name}`}
-                placeholder={`Enter ${param.name} (e.g., JSON string or script)`}
+                placeholder={param.type === 'function' ? 'Enter script here...' : 'Enter JSON string...'}
                 value={typeof paramValue === 'object' ? JSON.stringify(paramValue) : (paramValue !== undefined ? String(paramValue) : '')}
                 onChange={(e) => handleInputChange(param.name, e.target.value)}
                 className="text-sm h-20"
                 rows={2}
               />
-            ) : (
+            ) : ( // Default to string
               <Input
                 id={`${editableStep.id}-${param.name}`}
                 type="text"
-                placeholder={`Enter ${param.name}`}
+                placeholder={placeholder}
                 value={paramValue !== undefined ? String(paramValue) : ''}
                 onChange={(e) => handleInputChange(param.name, e.target.value)}
                 className="text-sm h-8"
@@ -442,7 +470,7 @@ export function StepItem({ step, isSelected, initialExpanded = false, onSelect, 
 
       {currentStepCommandInfo?.isElementCommand && (
         <>
-          {(editableStep.selectors || ['']).map((sel, index) => (
+          {(editableStep.selectors && editableStep.selectors.length > 0 ? editableStep.selectors : ['']).map((sel, index) => (
             <div key={index} className="grid grid-cols-3 gap-2 items-center">
               <Label htmlFor={`selector-${editableStep.id}-${index}`} className="text-xs">{index === 0 ? 'Selector(s)*' : `Alt. Sel. ${index}`}</Label>
               <div className="col-span-2 flex items-center gap-1">
@@ -475,7 +503,7 @@ export function StepItem({ step, isSelected, initialExpanded = false, onSelect, 
       {renderDynamicParamInputs()}
 
       <Button onClick={handleSaveChanges} size="sm" variant="default" className="h-8 mt-3 w-full">
-        <SaveIcon className="mr-1 h-3 w-3" /> Save Changes
+        <SaveIcon className="mr-1 h-3 w-3" /> Apply Changes
       </Button>
     </div>
   );
@@ -502,14 +530,18 @@ export function StepItem({ step, isSelected, initialExpanded = false, onSelect, 
                 <p>Type: {editableStep.type} {editableStep.commandKey ? `(Cmd: ${editableStep.commandKey})` : ''}</p>
               </TooltipContent>
             </Tooltip>
-            {editableStep.type !== 'undetermined' && <Badge variant="outline" className="text-xs capitalize h-6 px-2 py-1">{editableStep.type}</Badge>}
+            {editableStep.type !== 'undetermined' && (
+                <Badge variant="outline" className="text-xs h-6 px-2 py-1 whitespace-nowrap">
+                    {editableStep.badgeLabel || editableStep.type}
+                </Badge>
+            )}
 
             <div
               className="flex-grow truncate min-w-0"
               onClick={editableStep.type !== 'undetermined' ? toggleExpand : undefined}
               role={editableStep.type !== 'undetermined' ? "button" : undefined}
               tabIndex={editableStep.type !== 'undetermined' ? 0 : undefined}
-              onKeyDown={(e) => editableStep.type !== 'undetermined' && e.key === 'Enter' && toggleExpand()}
+              onKeyDown={(e) => editableStep.type !== 'undetermined' && (e.key === 'Enter' || e.key === ' ') && toggleExpand()}
               aria-expanded={isExpanded}
             >
               <p className="text-sm font-medium truncate" title={editableStep.description || "New Step - Choose Command"}>
@@ -531,15 +563,15 @@ export function StepItem({ step, isSelected, initialExpanded = false, onSelect, 
                   size="icon"
                   className="h-8 w-8 flex-shrink-0"
                   aria-label="More options"
-                  onClick={(e) => e.stopPropagation()}
-                  onFocus={(e) => e.stopPropagation()}
+                  onClick={(e) => e.stopPropagation()} // Prevent card click/toggle
+                  onFocus={(e) => e.stopPropagation()} // Prevent card click/toggle
                 >
                   <MoreOptionsIcon className="h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent
                 align="end"
-                onCloseAutoFocus={(e) => e.preventDefault()}
+                onCloseAutoFocus={(e) => e.preventDefault()} // Prevent focus shift that might close step
               >
                 <DropdownMenuItem onSelect={handleDelete} className="text-destructive focus:text-destructive focus:bg-destructive/10">
                   <DeleteIcon className="mr-2 h-4 w-4" />
@@ -556,3 +588,4 @@ export function StepItem({ step, isSelected, initialExpanded = false, onSelect, 
   );
 }
 
+    

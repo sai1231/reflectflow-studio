@@ -3,17 +3,19 @@ import type { Step, StepType } from '@/types';
 
 export interface CommandInfo {
   key: string;
+  badgeLabel: string; // For display in the StepItem badge
   description: string;
   requiredParams: string[]; // e.g., ["value: string", "attributeName: string"]
   optionalParams: string[]; // e.g., ["duration: number", "includeSelectorTag: boolean"]
   mapsToStepType: StepType;
   defaultParams?: Partial<Step>; // Pre-filled values for the step, matching the target StepType
-  isElementCommand?: boolean; // True if this command typically operates on an element (and thus needs selectors)
+  isElementCommand?: boolean; // True if this command typically operates on an element
 }
 
 export const availableCommands: CommandInfo[] = [
   {
     key: 'addValue',
+    badgeLabel: 'Add Value',
     description: 'Type text without clearing existing content.',
     requiredParams: ['value: string'],
     optionalParams: [],
@@ -23,6 +25,7 @@ export const availableCommands: CommandInfo[] = [
   },
   {
     key: 'clearValue',
+    badgeLabel: 'Clear Value',
     description: 'Clear text from input field.',
     requiredParams: [],
     optionalParams: [],
@@ -32,6 +35,7 @@ export const availableCommands: CommandInfo[] = [
   },
   {
     key: 'click',
+    badgeLabel: 'Click',
     description: 'Click on an element.',
     requiredParams: [],
     optionalParams: ['clickOptions: string'], // Representing object as string for JSON input
@@ -40,6 +44,7 @@ export const availableCommands: CommandInfo[] = [
   },
   {
     key: 'doubleClick',
+    badgeLabel: 'Double Click',
     description: 'Double-click an element.',
     requiredParams: [],
     optionalParams: [],
@@ -48,40 +53,45 @@ export const availableCommands: CommandInfo[] = [
   },
   {
     key: 'dragAndDrop',
+    badgeLabel: 'Drag & Drop',
     description: 'Drag and drop an element.',
     requiredParams: ['targetSelector: string'], // target is selector of the drop target
     optionalParams: ['duration: number'],
     mapsToStepType: 'dragAndDrop',
-    isElementCommand: true, // The source element uses the main selector
+    isElementCommand: true,
   },
   {
     key: 'execute',
+    badgeLabel: 'Execute JS',
     description: 'Run sync JavaScript in browser.',
-    requiredParams: ['script: string'], // script as string
+    requiredParams: ['script: string'], // script as string or function string
     optionalParams: ['scriptArgs: string'], // ...args: any[] as JSON string
     mapsToStepType: 'executeScript',
-    isElementCommand: false, // Can be global or on an element if element is passed as arg
+    isElementCommand: false,
   },
   {
     key: 'executeAsync',
+    badgeLabel: 'Execute Async JS',
     description: 'Run async JavaScript in browser.',
-    requiredParams: ['script: string'], // script as string
+    requiredParams: ['script: string'], // script as string or function string
     optionalParams: ['scriptArgs: string'], // ...args: any[] as JSON string
     mapsToStepType: 'executeScript',
-    isElementCommand: false, // Similar to execute
+    isElementCommand: false,
     defaultParams: { isAsync: true }
   },
   {
     key: 'getAttribute',
+    badgeLabel: 'Get Attribute',
     description: "Get element's HTML attribute value.",
     requiredParams: ['attributeName: string'],
     optionalParams: [],
-    mapsToStepType: 'waitForElement', // Will use property and expectedValue for assertion
+    mapsToStepType: 'waitForElement',
     isElementCommand: true,
     defaultParams: { operator: 'exists', propertyType: 'attribute' }
   },
   {
     key: 'getCSSProperty',
+    badgeLabel: 'Get CSS Property',
     description: "Get element's CSS property value.",
     requiredParams: ['cssProperty: string'],
     optionalParams: [],
@@ -91,6 +101,7 @@ export const availableCommands: CommandInfo[] = [
   },
   {
     key: 'getComputedLabel',
+    badgeLabel: 'Get Comp. Label',
     description: "Get element's accessible label.",
     requiredParams: [],
     optionalParams: [],
@@ -100,6 +111,7 @@ export const availableCommands: CommandInfo[] = [
   },
   {
     key: 'getComputedRole',
+    badgeLabel: 'Get Comp. Role',
     description: "Get element's accessible role.",
     requiredParams: [],
     optionalParams: [],
@@ -108,25 +120,28 @@ export const availableCommands: CommandInfo[] = [
     defaultParams: { property: 'computedRole', operator: 'exists', propertyType: 'computed' }
   },
   {
-    key: 'getElement',
+    key: 'getElement', // This is like 'find element'
+    badgeLabel: 'Find Element',
     description: 'Find single element.',
     requiredParams: [],
     optionalParams: [],
-    mapsToStepType: 'waitForElement', // Essentially a 'waitForExist'
+    mapsToStepType: 'waitForElement',
     isElementCommand: true,
-    defaultParams: { property: 'existing', operator: 'exists', expectedValue: true }
+    defaultParams: { property: 'existing', operator: 'exists', expectedValue: true, description: 'Find single element.' }
   },
   {
-    key: 'getElements',
+    key: 'getElements', // This is like 'find elements'
+    badgeLabel: 'Find Elements',
     description: 'Find multiple elements. (Represented as wait for at least one)',
     requiredParams: [],
     optionalParams: [],
     mapsToStepType: 'waitForElement',
     isElementCommand: true,
-    defaultParams: { property: 'existing', operator: 'exists', expectedValue: true }
+    defaultParams: { property: 'existing', operator: 'exists', expectedValue: true, description: 'Find multiple elements.' }
   },
   {
     key: 'getHTML',
+    badgeLabel: 'Get HTML',
     description: "Get element's HTML content.",
     requiredParams: [],
     optionalParams: ['includeSelectorTag: boolean'],
@@ -136,17 +151,19 @@ export const availableCommands: CommandInfo[] = [
   },
   {
     key: 'getLocation',
+    badgeLabel: 'Get Location',
     description: "Get element's X/Y coordinates.",
     requiredParams: [],
-    optionalParams: [], // x, y are part of the return, not input params for this "get"
+    optionalParams: [],
     mapsToStepType: 'waitForElement',
     isElementCommand: true,
     defaultParams: { property: 'location.x', operator: 'exists', propertyType: 'location' }
   },
   {
     key: 'getProperty',
+    badgeLabel: 'Get JS Property',
     description: "Get element's JS property value.",
-    requiredParams: ['jsPropertyName: string'],
+    requiredParams: ['jsPropertyName: string'], // Renamed from propertyName for clarity
     optionalParams: [],
     mapsToStepType: 'waitForElement',
     isElementCommand: true,
@@ -154,15 +171,17 @@ export const availableCommands: CommandInfo[] = [
   },
   {
     key: 'getSize',
+    badgeLabel: 'Get Size',
     description: "Get element's width and height.",
     requiredParams: [],
-    optionalParams: [], // width, height are part of return
+    optionalParams: [],
     mapsToStepType: 'waitForElement',
     isElementCommand: true,
     defaultParams: { property: 'size.width', operator: 'exists', propertyType: 'size' }
   },
   {
     key: 'getTagName',
+    badgeLabel: 'Get Tag Name',
     description: "Get element's HTML tag name.",
     requiredParams: [],
     optionalParams: [],
@@ -172,6 +191,7 @@ export const availableCommands: CommandInfo[] = [
   },
   {
     key: 'getText',
+    badgeLabel: 'Get Text',
     description: "Get element's visible text.",
     requiredParams: [],
     optionalParams: [],
@@ -181,6 +201,7 @@ export const availableCommands: CommandInfo[] = [
   },
   {
     key: 'getValue',
+    badgeLabel: 'Get Value',
     description: "Get input/select element's value.",
     requiredParams: [],
     optionalParams: [],
@@ -190,6 +211,7 @@ export const availableCommands: CommandInfo[] = [
   },
   {
     key: 'isClickable',
+    badgeLabel: 'Is Clickable',
     description: 'Check if element is clickable.',
     requiredParams: [],
     optionalParams: [],
@@ -199,6 +221,7 @@ export const availableCommands: CommandInfo[] = [
   },
   {
     key: 'isDisplayed',
+    badgeLabel: 'Is Visible',
     description: 'Check if element is visible.',
     requiredParams: [],
     optionalParams: [],
@@ -208,6 +231,7 @@ export const availableCommands: CommandInfo[] = [
   },
   {
     key: 'isEnabled',
+    badgeLabel: 'Is Enabled',
     description: 'Check if element is enabled.',
     requiredParams: [],
     optionalParams: [],
@@ -217,14 +241,16 @@ export const availableCommands: CommandInfo[] = [
   },
   {
     key: 'isEqual',
+    badgeLabel: 'Is Equal To',
     description: 'Check if two elements are the same.',
-    requiredParams: ['otherSelector: string'],
+    requiredParams: ['otherSelector: string'], // Renamed from otherElement
     optionalParams: [],
     mapsToStepType: 'isEqual',
-    isElementCommand: true, // First element is the main selector
+    isElementCommand: true,
   },
   {
     key: 'isExisting',
+    badgeLabel: 'Is Existing',
     description: 'Check if element exists in DOM.',
     requiredParams: [],
     optionalParams: [],
@@ -234,6 +260,7 @@ export const availableCommands: CommandInfo[] = [
   },
   {
     key: 'isFocused',
+    badgeLabel: 'Is Focused',
     description: 'Check if element has focus.',
     requiredParams: [],
     optionalParams: [],
@@ -243,6 +270,7 @@ export const availableCommands: CommandInfo[] = [
   },
   {
     key: 'isSelected',
+    badgeLabel: 'Is Selected',
     description: 'Check if option/checkbox/radio is selected.',
     requiredParams: [],
     optionalParams: [],
@@ -252,6 +280,7 @@ export const availableCommands: CommandInfo[] = [
   },
   {
     key: 'isStable',
+    badgeLabel: 'Is Stable',
     description: 'Check if element is stable (not moving/changing).',
     requiredParams: [],
     optionalParams: [],
@@ -261,6 +290,7 @@ export const availableCommands: CommandInfo[] = [
   },
   {
     key: 'moveTo',
+    badgeLabel: 'Move To',
     description: 'Move mouse to element center.',
     requiredParams: [],
     optionalParams: ['xOffset: number', 'yOffset: number'],
@@ -269,52 +299,58 @@ export const availableCommands: CommandInfo[] = [
   },
   {
     key: 'nextElement',
-    description: 'Get next sibling element. (Represented as waitForExist on derived selector)',
+    badgeLabel: 'Next Element',
+    description: 'Get next sibling element.',
     requiredParams: [],
     optionalParams: [],
-    mapsToStepType: 'waitForElement', // This is tricky, would need selector modification logic
+    mapsToStepType: 'waitForElement',
     isElementCommand: true,
-    defaultParams: { property: 'existing', operator: 'exists', expectedValue: true, derivedAction: 'nextElement' }
+    defaultParams: { property: 'existing', operator: 'exists', expectedValue: true, derivedAction: 'nextElement', description: 'Get next sibling element.' }
   },
   {
     key: 'parentElement',
-    description: 'Get parent element. (Represented as waitForExist on derived selector)',
+    badgeLabel: 'Parent Element',
+    description: 'Get parent element.',
     requiredParams: [],
     optionalParams: [],
     mapsToStepType: 'waitForElement',
     isElementCommand: true,
-    defaultParams: { property: 'existing', operator: 'exists', expectedValue: true, derivedAction: 'parentElement' }
+    defaultParams: { property: 'existing', operator: 'exists', expectedValue: true, derivedAction: 'parentElement', description: 'Get parent element.' }
   },
   {
     key: 'previousElement',
-    description: 'Get previous sibling element. (Represented as waitForExist on derived selector)',
+    badgeLabel: 'Prev Element',
+    description: 'Get previous sibling element.',
     requiredParams: [],
     optionalParams: [],
     mapsToStepType: 'waitForElement',
     isElementCommand: true,
-    defaultParams: { property: 'existing', operator: 'exists', expectedValue: true, derivedAction: 'previousElement' }
+    defaultParams: { property: 'existing', operator: 'exists', expectedValue: true, derivedAction: 'previousElement', description: 'Get previous sibling element.' }
   },
   {
     key: 'saveScreenshot',
+    badgeLabel: 'Save Screenshot',
     description: 'Take screenshot.',
-    requiredParams: [],
+    requiredParams: [], // filename is optional
     optionalParams: ['filename: string'],
     mapsToStepType: 'saveScreenshot',
-    isElementCommand: false, // Typically global, can be element-specific if API supports
+    isElementCommand: false, // Can be global or on element. Defaulting to global.
   },
   {
     key: 'scrollIntoView',
+    badgeLabel: 'Scroll To View',
     description: 'Scroll element into view.',
     requiredParams: [],
     optionalParams: ['scrollIntoViewOptions: string'], // scrollOptions: object as JSON string
     mapsToStepType: 'scroll',
-    isElementCommand: true, // This command specifically targets an element
+    isElementCommand: true,
     defaultParams: { scrollType: 'element' }
   },
   {
     key: 'selectByAttribute',
+    badgeLabel: 'Select by Attribute',
     description: 'Select dropdown option by attribute.',
-    requiredParams: ['attributeName: string', 'attributeValue: string'],
+    requiredParams: ['attributeName: string', 'attributeValue: string'], // Renamed from attribute, value
     optionalParams: [],
     mapsToStepType: 'selectOption',
     isElementCommand: true,
@@ -322,8 +358,9 @@ export const availableCommands: CommandInfo[] = [
   },
   {
     key: 'selectByIndex',
+    badgeLabel: 'Select by Index',
     description: 'Select dropdown option by index.',
-    requiredParams: ['optionIndex: number'],
+    requiredParams: ['optionIndex: number'], // Renamed from index
     optionalParams: [],
     mapsToStepType: 'selectOption',
     isElementCommand: true,
@@ -331,8 +368,9 @@ export const availableCommands: CommandInfo[] = [
   },
   {
     key: 'selectByVisibleText',
+    badgeLabel: 'Select by Text',
     description: 'Select dropdown option by visible text.',
-    requiredParams: ['visibleText: string'],
+    requiredParams: ['visibleText: string'], // Renamed from text
     optionalParams: [],
     mapsToStepType: 'selectOption',
     isElementCommand: true,
@@ -340,6 +378,7 @@ export const availableCommands: CommandInfo[] = [
   },
   {
     key: 'setValue',
+    badgeLabel: 'Set Value',
     description: 'Type text, clearing existing content first.',
     requiredParams: ['value: string'],
     optionalParams: [],
@@ -348,68 +387,76 @@ export const availableCommands: CommandInfo[] = [
   },
   {
     key: 'touchAction',
+    badgeLabel: 'Touch Action',
     description: 'Perform touch gestures (mobile).',
-    requiredParams: ['touchActionArgs: string'], // action: string | object | Array<object> as JSON string
+    requiredParams: ['touchActionArgs: string'], // Renamed from action
     optionalParams: [],
     mapsToStepType: 'touchAction',
-    isElementCommand: true, // Usually on an element
+    isElementCommand: true,
   },
   {
     key: 'waitForClickable',
+    badgeLabel: 'Wait: Clickable',
     description: 'Wait until element is clickable.',
     requiredParams: [],
-    optionalParams: ['timeout: number', 'reverse: boolean', 'waitTimeoutMessage: string', 'checkInterval: number'],
+    optionalParams: ['timeout: number', 'reverse: boolean', 'waitTimeoutMessage: string', 'checkInterval: number'], // Renamed interval, timeoutMsg
     mapsToStepType: 'waitForElement',
     isElementCommand: true,
-    defaultParams: { property: 'clickable', operator: 'clickable', expectedValue: true }
+    defaultParams: { property: 'clickable', operator: 'clickable', expectedValue: true, description: 'Wait until element is clickable.' }
   },
   {
     key: 'waitForDisplayed',
+    badgeLabel: 'Wait: Visible',
     description: 'Wait until element is visible.',
     requiredParams: [],
     optionalParams: ['timeout: number', 'reverse: boolean', 'waitTimeoutMessage: string', 'checkInterval: number'],
     mapsToStepType: 'waitForElement',
     isElementCommand: true,
-    defaultParams: { property: 'visible', operator: '==', expectedValue: true }
+    defaultParams: { property: 'visible', operator: '==', expectedValue: true, description: 'Wait until element is visible.' }
   },
   {
     key: 'waitForEnabled',
+    badgeLabel: 'Wait: Enabled',
     description: 'Wait until element is enabled.',
     requiredParams: [],
     optionalParams: ['timeout: number', 'reverse: boolean', 'waitTimeoutMessage: string', 'checkInterval: number'],
     mapsToStepType: 'waitForElement',
     isElementCommand: true,
-    defaultParams: { property: 'enabled', operator: '==', expectedValue: true }
+    defaultParams: { property: 'enabled', operator: '==', expectedValue: true, description: 'Wait until element is enabled.' }
   },
   {
     key: 'waitForExist',
+    badgeLabel: 'Wait: Exists',
     description: 'Wait until element exists.',
     requiredParams: [],
     optionalParams: ['timeout: number', 'reverse: boolean', 'waitTimeoutMessage: string', 'checkInterval: number'],
     mapsToStepType: 'waitForElement',
     isElementCommand: true,
-    defaultParams: { property: 'existing', operator: 'exists', expectedValue: true }
+    defaultParams: { property: 'existing', operator: 'exists', expectedValue: true, description: 'Wait until element exists.' }
   },
   {
     key: 'waitForStable',
+    badgeLabel: 'Wait: Stable',
     description: 'Wait until element is stable.',
     requiredParams: [],
     optionalParams: ['timeout: number', 'waitTimeoutMessage: string'],
     mapsToStepType: 'waitForElement',
     isElementCommand: true,
-    defaultParams: { property: 'stable', operator: 'stable', expectedValue: true }
+    defaultParams: { property: 'stable', operator: 'stable', expectedValue: true, description: 'Wait until element is stable.' }
   },
   {
     key: 'waitUntil',
+    badgeLabel: 'Wait Until',
     description: 'Wait until custom condition is true.',
-    requiredParams: ['conditionScript: string'], // condition: function as string
-    optionalParams: ['waitUntilOptions: string'], // options: object as JSON string
+    requiredParams: ['conditionScript: string'], // Renamed from condition
+    optionalParams: ['waitUntilOptions: string'], // Renamed from options
     mapsToStepType: 'waitUntil',
-    isElementCommand: false, // Condition is global JS
+    isElementCommand: false,
   },
-  // Adding browser/navigation commands that are not element specific
+  // Adding commands from earlier stage that might be missing in user's current JSON list but are good to have
   {
     key: 'navigate',
+    badgeLabel: 'Navigate',
     description: 'Navigate to a new URL.',
     requiredParams: ['url: string'],
     optionalParams: [],
@@ -418,6 +465,7 @@ export const availableCommands: CommandInfo[] = [
   },
   {
     key: 'scrollWindow',
+    badgeLabel: 'Scroll Window',
     description: 'Scroll the window to specified coordinates.',
     requiredParams: ['x: number', 'y: number'],
     optionalParams: [],
@@ -427,29 +475,26 @@ export const availableCommands: CommandInfo[] = [
   },
    {
     key: 'pause',
+    badgeLabel: 'Pause',
     description: 'Pause execution for a specified duration.',
     requiredParams: ['duration: number'],
     optionalParams: [],
-    mapsToStepType: 'pause', // Requires new StepType
+    mapsToStepType: 'pause',
     isElementCommand: false,
   },
   {
     key: 'debug',
+    badgeLabel: 'Debug',
     description: 'Pause execution and enter debug mode.',
     requiredParams: [],
     optionalParams: [],
-    mapsToStepType: 'debug', // Requires new StepType
+    mapsToStepType: 'debug',
     isElementCommand: false,
   },
 ];
 
-// Helper to find CommandInfo by key
 export const findCommandByKey = (key: string): CommandInfo | undefined => {
   return availableCommands.find(cmd => cmd.key === key);
 };
 
-// Helper to find CommandInfo by mapped StepType (can be ambiguous if multiple keys map to same type)
-// For robust mapping, consider storing original commandKey on the Step object if needed.
-export const findCommandByStepTypeAndDescription = (stepType: StepType, description: string): CommandInfo | undefined => {
-  return availableCommands.find(cmd => cmd.mapsToStepType === stepType && cmd.description === description);
-};
+    
