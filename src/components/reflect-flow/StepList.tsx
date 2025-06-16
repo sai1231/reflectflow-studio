@@ -33,9 +33,9 @@ export function StepList({ steps, selectedSteps, onSelectStep, onUpdateStep, onD
   }
 
   return (
-    <ScrollArea className="flex-1 min-h-0">
+    <ScrollArea className="h-full w-full">
       <div className="p-1 space-y-1">
-        {steps.map((step, index) => (
+        {steps.map((step) => (
           <StepItem
             key={step.id}
             step={step}

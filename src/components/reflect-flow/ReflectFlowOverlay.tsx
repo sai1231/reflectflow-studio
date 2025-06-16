@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useCallback, useEffect, useRef } from 'react';
-import type { Step, StepType, NavigateStep, ClickStep, TypeStep, ScrollStep, WaitForElementStep, KeyDownStep, KeyUpStep, DoubleClickStep, MoveToStep, UndeterminedStep, DragAndDropStep, ExecuteScriptStep, IsEqualStep, SaveScreenshotStep, SelectOptionStep, TouchActionStep, WaitUntilStep, PauseStep, DebugStep, RecordingSession } from '@/types';
+import type { Step, ClickStep, RecordingSession, UndeterminedStep, ElementInfoForPopup } from '@/types';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { HeaderControls } from './HeaderControls';
@@ -10,8 +10,8 @@ import { StepList } from './StepList';
 import { ElementHoverPopup } from './ElementHoverPopup';
 import { HighlightOverlay } from './HighlightOverlay';
 import { useToast } from '@/hooks/use-toast';
-import { PlayIcon, CheckboxSquareIcon, CheckboxUncheckedIcon, FileIcon, TargetIcon, AddIcon, NavigateIcon, ClickIcon as ClickActionIcon, TypeActionIcon as TypeActionIconLucide, ScrollIcon as ScrollActionIcon, AssertIcon as WaitActionIcon, KeyboardIcon as KeyActionIcon, MoveToIcon as MoveActionIcon } from './icons'; // Updated imports
-import { CommandInfo, findCommandByKey, availableCommands } from '@/lib/commands';
+import { PlayIcon, CheckboxSquareIcon, CheckboxUncheckedIcon, FileIcon, TargetIcon, AddIcon, ClickIcon as ClickActionIcon } from './icons'; 
+import { CommandInfo, findCommandByKey } from '@/lib/commands';
 
 
 interface ElementDetails {
@@ -19,12 +19,6 @@ interface ElementDetails {
   info: ElementInfoForPopup;
 }
 
-interface ElementInfoForPopup {
-  id?: string;
-  cssSelector?: string;
-  xpath?: string;
-  tagName?: string;
-}
 
 const PANEL_WIDTH_EXPANDED = 400;
 const PANEL_WIDTH_COLLAPSED = 160;
@@ -214,23 +208,23 @@ export function ReflectFlowOverlay() {
     if (selectors.length === 0) selectors.push(elementInfo.tagName || 'unknown');
 
     const primarySelector = selectors[0] || 'N/A';
-    const commandInfo = findCommandByKey('click');
+    const commandInfo = findCommandByKey('click')!; // click command is guaranteed to exist
 
     const newStep: ClickStep = {
       id: String(Date.now()) + Math.random().toString(36).substring(2,7),
       type: 'click',
       commandKey: 'click',
-      badgeLabel: commandInfo?.badgeLabel || 'Click',
-      description: commandInfo?.description || `Click on ${elementInfo.tagName}${primarySelector !== elementInfo.tagName ? ` (${primarySelector})` : ''}`,
+      badgeLabel: commandInfo.badgeLabel,
+      description: commandInfo.description,
       selectors: selectors,
       selector: primarySelector,
       target: 'main',
       timeout: 5000,
-      ...(commandInfo?.defaultParams as Partial<ClickStep> || {})
+      ...(commandInfo.defaultParams as Partial<ClickStep> || {})
     };
 
     setRecordedSteps(prevSteps => [...prevSteps, newStep]);
-    toast({ title: "Action Recorded", description: `Recorded: ${newStep.description}` });
+    toast({ title: "Action Recorded", description: `Recorded: Click on ${primarySelector}` });
   }, [toast, isElementSelectorActive, isRecording, isElementContextMenuOpen]);
 
   useEffect(() => {
@@ -406,57 +400,40 @@ export function ReflectFlowOverlay() {
     const primarySelector = allSelectors[0];
     const baseId = String(Date.now()) + Math.random().toString(36).substring(2,7);
 
-    let newStep: Step = {
-      id: baseId,
+    let newStepData: Partial<Step> = {
       type: commandInfo.mapsToStepType,
       commandKey: commandInfo.key,
       badgeLabel: commandInfo.badgeLabel,
       description: commandInfo.description,
-      selectors: commandInfo.isElementCommand ? allSelectors : undefined, // Use undefined for non-element commands
-      selector: commandInfo.isElementCommand ? primarySelector : undefined, // Use undefined for non-element commands
+      selectors: commandInfo.isElementCommand ? allSelectors : undefined,
+      selector: commandInfo.isElementCommand ? primarySelector : undefined,
       target: 'main',
       timeout: 5000,
       ...(commandInfo.defaultParams || {})
-    } as Step;
-
+    };
+    
     const allParamsFromCmd = [...commandInfo.requiredParams, ...commandInfo.optionalParams];
     allParamsFromCmd.forEach(paramDefString => {
         const namePart = paramDefString.split(':')[0].replace('...', '').replace('?', '').trim();
         const typePart = (paramDefString.split(':')[1] || 'string').trim().toLowerCase();
         
-        if (!(namePart in newStep)) { 
+        if (!(namePart in newStepData)) { 
             if (typePart.includes('string') || typePart.includes('function') || typePart.includes('object') || typePart.includes('array')) {
-                (newStep as any)[namePart] = '';
+                (newStepData as any)[namePart] = '';
             } else if (typePart.includes('number')) {
-                (newStep as any)[namePart] = 0;
+                (newStepData as any)[namePart] = 0;
             } else if (typePart.includes('boolean')) {
-                (newStep as any)[namePart] = false;
+                (newStepData as any)[namePart] = false;
             } else {
-                 (newStep as any)[namePart] = ''; 
+                 (newStepData as any)[namePart] = ''; 
             }
         }
     });
-    
-    // Specific initialization logic after default params are set
-    if (commandInfo.key === 'getAttribute' && !('attributeName' in newStep)) {
-        (newStep as WaitForElementStep).attributeName = '';
-    }
-    if (commandInfo.key === 'getCSSProperty' && !('cssProperty' in newStep)) {
-        (newStep as WaitForElementStep).cssProperty = '';
-    }
-    if (commandInfo.key === 'getProperty' && !('jsPropertyName' in newStep)) {
-        (newStep as WaitForElementStep).jsPropertyName = '';
-    }
-    if (commandInfo.key === 'selectByAttribute' && !('attributeName' in newStep)) {
-        (newStep as SelectOptionStep).attributeName = '';
-        (newStep as SelectOptionStep).attributeValue = '';
-    }
-    if (commandInfo.key === 'selectByIndex' && !('optionIndex' in newStep)) {
-        (newStep as SelectOptionStep).optionIndex = 0;
-    }
-    if (commandInfo.key === 'selectByVisibleText' && !('visibleText' in newStep)) {
-        (newStep as SelectOptionStep).visibleText = '';
-    }
+
+    const newStep = {
+      id: baseId,
+      ...newStepData,
+    } as Step;
 
 
     setRecordedSteps(prev => [...prev, newStep]);
@@ -474,8 +451,8 @@ export function ReflectFlowOverlay() {
         description: 'New Step - Choose Command',
         target: 'main',
         timeout: 5000,
-        selectors: [''], // Default with an empty selector
-        selector: ''      // Default with an empty selector
+        selectors: [''], 
+        selector: ''      
     };
     setRecordedSteps(prev => [...prev, newStep]);
     setNewlyAddedStepId(newStep.id);
@@ -588,7 +565,7 @@ export function ReflectFlowOverlay() {
         </CardHeader>
         {!isPanelCollapsed && (
           <>
-            <CardContent className="flex-1 flex flex-col min-h-0 p-0 relative">
+            <CardContent className="flex-1 min-h-0 overflow-hidden p-0 relative">
               <StepList
                 steps={recordedSteps}
                 selectedSteps={selectedSteps}

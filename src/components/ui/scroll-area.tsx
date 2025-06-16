@@ -16,7 +16,7 @@ const ScrollArea = React.forwardRef<
     {...props}
   >
     <ScrollAreaPrimitive.Viewport
-      className={cn("h-full w-full rounded-[inherit]")} // Removed explicit overflow-y-auto
+      className={cn("h-full w-full rounded-[inherit] overflow-y-auto")} 
     >
       {children}
     </ScrollAreaPrimitive.Viewport>
