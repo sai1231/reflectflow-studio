@@ -38,7 +38,7 @@ import {
   ListChecks as LucideListChecks,
   Sigma as LucideSigma,
   Maximize2,
-  Tags as LucideTags,
+  Tags as LucideTagsImport, // Aliased to avoid conflict if TagsIcon is defined later differently
   LocateFixed,
   FileCode as LucideFileCode,
   Move,
@@ -57,6 +57,7 @@ import {
   ChevronsUpDown,
   PauseCircle,
   Bug,
+  Download as LucideDownload, // Added Download icon
 } from 'lucide-react';
 
 export const RecordIcon = CircleDot;
@@ -95,14 +96,14 @@ export const AddValueIcon = PlusSquare;
 export const ClearValueIcon = Eraser;
 export const GetAttributeIcon = AtSign;
 export const IsEnabledIcon = ToggleRight;
-export const IsExistingIcon = LucideCheckCircle2;
-export const CheckCircle2 = LucideCheckCircle2;
+export const IsExistingIcon = LucideCheckCircle2; // Exported as IsExistingIcon
+export const CheckCircle2 = LucideCheckCircle2; // Exported as CheckCircle2 for ElementHoverPopup
 export const GetTextIcon = WholeWord;
 export const GetPropertyIcon = LucideSigma;
 export const GetSizeIcon = Maximize2;
-export const GetTagNameIcon = LucideTags;
+export const TagsIcon = LucideTagsImport; // Exported as TagsIcon for ElementHoverPopup
 export const GetLocationIcon = LocateFixed;
-export const GetHtmlIcon = LucideFileCode;
+export const GetHtmlIcon = LucideFileCode; // this was LucideFileCode
 export const MoveToIcon = Move;
 export const SaveScreenshotIcon = Camera;
 export const TouchActionIcon = LucideHand;
@@ -123,7 +124,7 @@ export const ChevronDownIcon = ChevronDown;
 export const HelpCircleIcon = HelpCircle;
 
 // New Icons from latest request / existing
-export const FileCodeIcon = LucideFileCode;
+export const FileCodeIcon = LucideFileCode; // Explicitly exporting to ensure it's available
 export const ChevronsUpDownIcon = ChevronsUpDown;
 export const PauseCircleIcon = PauseCircle;
 export const BugIcon = Bug;
@@ -131,6 +132,6 @@ export const ListChecksIcon = LucideListChecks;
 export const HandIcon = LucideHand;
 export const WatchIcon = Watch;
 export const Sigma = LucideSigma;
-export const TagsIcon = LucideTags; // Added this export
 
+export const DownloadIcon = LucideDownload; // Exporting the Download icon
 

@@ -2,13 +2,14 @@
 "use client";
 
 import { Button } from '@/components/ui/button';
-import { RecordIcon, PauseIcon, SaveIcon, TargetIcon, ChevronUpIcon, ChevronDownIcon } from './icons';
+import { RecordIcon, PauseIcon, SaveIcon, TargetIcon, ChevronUpIcon, ChevronDownIcon, DownloadIcon } from './icons';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface HeaderControlsProps {
   isRecording: boolean;
   onToggleRecording: () => void;
   onSaveSession: () => void;
+  onExportSession: () => void; // New prop
   stepCount: number;
   isElementSelectorActive: boolean;
   onToggleElementSelector: () => void;
@@ -20,6 +21,7 @@ export function HeaderControls({
   isRecording,
   onToggleRecording,
   onSaveSession,
+  onExportSession, // Destructure new prop
   stepCount,
   isElementSelectorActive,
   onToggleElementSelector,
@@ -36,7 +38,7 @@ export function HeaderControls({
                 onClick={onToggleRecording}
                 variant={isRecording ? "destructive" : "default"}
                 size="sm"
-                className={isPanelCollapsed ? "w-9 h-9 p-0" : "w-auto px-3"} // Adjusted width for text when expanded
+                className={isPanelCollapsed ? "w-9 h-9 p-0" : "w-auto px-3"}
               >
                 {isRecording ? <PauseIcon className="h-4 w-4" /> : <RecordIcon className="h-4 w-4" />}
                 {!isPanelCollapsed && <span className="ml-2">{isRecording ? 'Pause' : 'Record'}</span>}
@@ -48,17 +50,30 @@ export function HeaderControls({
           </Tooltip>
 
           {!isPanelCollapsed && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button onClick={onSaveSession} variant="outline" size="sm" disabled={isRecording || stepCount === 0}>
-                  <SaveIcon className="mr-2 h-4 w-4" />
-                  Save
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Save current session (simulated)</p>
-              </TooltipContent>
-            </Tooltip>
+            <>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button onClick={onSaveSession} variant="outline" size="sm" disabled={isRecording || stepCount === 0}>
+                    <SaveIcon className="mr-2 h-4 w-4" />
+                    Save
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Save current session to Local Storage</p>
+                </TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button onClick={onExportSession} variant="outline" size="sm" disabled={isRecording || stepCount === 0}>
+                    <DownloadIcon className="mr-2 h-4 w-4" />
+                    Export
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Export session as JSON file</p>
+                </TooltipContent>
+              </Tooltip>
+            </>
           )}
 
           <Tooltip>
@@ -68,7 +83,7 @@ export function HeaderControls({
                 variant={isElementSelectorActive ? "secondary" : "outline"}
                 size="icon"
                 className="h-9 w-9"
-                disabled={isRecording && !isPanelCollapsed && !isPanelCollapsed} 
+                disabled={isRecording && !isPanelCollapsed}
               >
                 <TargetIcon className="h-4 w-4" />
               </Button>

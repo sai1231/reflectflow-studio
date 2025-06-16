@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useCallback, useEffect, useRef } from 'react';
-import type { Step, UndeterminedStep, ElementInfoForPopup } from '@/types';
+import type { Step, UndeterminedStep, RecordingSession, ClickStep, ElementInfoForPopup } from '@/types';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { HeaderControls } from './HeaderControls';
@@ -22,7 +22,7 @@ interface ElementDetails {
 
 
 const PANEL_WIDTH_EXPANDED = 400;
-const PANEL_WIDTH_COLLAPSED = 160;
+const PANEL_WIDTH_COLLAPSED = 160; 
 const PANEL_MIN_LEFT = 16;
 const PANEL_MIN_TOP = 16;
 
@@ -474,6 +474,36 @@ export function ReflectFlowOverlay() {
     }
   }, [toast, recordedSteps]);
 
+  const handleExportSession = useCallback(() => {
+    const sessionToSave: RecordingSession = {
+      title: "My Recorded Session - " + new Date().toISOString(),
+      description: "A recording of user interactions exported from ReflectFlow.",
+      url: window.location.href,
+      steps: recordedSteps,
+      device_screen_emulation: {
+        width: window.innerWidth,
+        height: window.innerHeight,
+        deviceScaleFactor: window.devicePixelRatio,
+        mobile: /Mobi|Android/i.test(navigator.userAgent),
+        userAgent: navigator.userAgent,
+      }
+    };
+
+    const jsonString = JSON.stringify(sessionToSave, null, 2);
+    const blob = new Blob([jsonString], { type: "application/json" });
+    const href = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = href;
+    link.download = `reflectflow-session-${Date.now()}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(href);
+
+    toast({ title: "Session Exported", description: "Session data downloaded as JSON file." });
+  }, [toast, recordedSteps]);
+
+
   const handleUpdateStep = useCallback((updatedStep: Step) => {
     setRecordedSteps(prev => prev.map(s => s.id === updatedStep.id ? updatedStep : s));
     if (updatedStep.type !== 'undetermined') {
@@ -517,7 +547,7 @@ export function ReflectFlowOverlay() {
     >
       <Card
         ref={panelCardRef}
-        className={`max-h-[calc(100vh-32px)] flex flex-col shadow-2xl pointer-events-auto overflow-hidden bg-card/90 backdrop-blur-sm transition-[width] duration-300 ease-in-out ${panelWidthClass}`}
+        className={`max-h-[calc(100vh-32px)] flex flex-col shadow-2xl pointer-events-auto bg-card/90 backdrop-blur-sm transition-[width] duration-300 ease-in-out ${panelWidthClass}`}
       >
         <CardHeader
           className="p-4 border-b cursor-grab"
@@ -533,13 +563,14 @@ export function ReflectFlowOverlay() {
                 </div>
               </div>
             )}
-            {isPanelCollapsed && <div className="w-6 h-6"></div>}
+            {isPanelCollapsed && <div className="w-6 h-6"></div>} {/* Placeholder to maintain height */}
           </div>
           <div className={`mt-4 ${isPanelCollapsed ? 'flex justify-center' : ''}`}>
             <HeaderControls
               isRecording={isRecording}
               onToggleRecording={handleToggleRecording}
               onSaveSession={handleSaveSession}
+              onExportSession={handleExportSession}
               stepCount={recordedSteps.length}
               isElementSelectorActive={isElementSelectorActive}
               onToggleElementSelector={handleToggleElementSelector}
@@ -611,7 +642,3 @@ export function ReflectFlowOverlay() {
   );
 }
     
-
-    
-
-
