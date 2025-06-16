@@ -69,6 +69,7 @@ const generateElementInfo = (element: HTMLElement): ElementInfoForPopup => {
 
 
 export function ReflectFlowOverlay() {
+  const [isMounted, setIsMounted] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [recordedSteps, setRecordedSteps] = useState<Step[]>([]);
   const [isElementSelectorActive, setIsElementSelectorActive] = useState(false);
@@ -86,7 +87,7 @@ export function ReflectFlowOverlay() {
   const { toast } = useToast();
 
   const [isPanelCollapsed, setIsPanelCollapsed] = useState(false);
-  const [panelPosition, setPanelPosition] = useState<{ top: number; left: number }>({ top: PANEL_MIN_TOP, left: -9999 });
+  const [panelPosition, setPanelPosition] = useState<{ top: number; left: number } | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [dragStartOffset, setDragStartOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [newlyAddedStepId, setNewlyAddedStepId] = useState<string | null>(null);
@@ -95,6 +96,7 @@ export function ReflectFlowOverlay() {
   useEffect(() => { isDraggingRef.current = isDragging; }, [isDragging]);
   const dragStartOffsetRef = useRef(dragStartOffset);
   useEffect(() => { dragStartOffsetRef.current = dragStartOffset; }, [dragStartOffset]);
+  
   const currentPanelPositionRef = useRef(panelPosition);
   useEffect(() => { currentPanelPositionRef.current = panelPosition; }, [panelPosition]);
 
@@ -103,14 +105,18 @@ export function ReflectFlowOverlay() {
 
 
   useEffect(() => {
-    if (panelPosition.left === -9999 && typeof window !== 'undefined') {
-      const initialWidth = isPanelCollapsed ? PANEL_WIDTH_COLLAPSED : PANEL_WIDTH_EXPANDED;
-      setPanelPosition({
-        top: PANEL_MIN_TOP,
-        left: Math.max(PANEL_MIN_LEFT, window.innerWidth - initialWidth - PANEL_MIN_LEFT),
-      });
-    }
-  }, [isPanelCollapsed, panelPosition.left]);
+    setIsMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!isMounted || typeof window === 'undefined') return;
+
+    const initialWidth = isPanelCollapsed ? PANEL_WIDTH_COLLAPSED : PANEL_WIDTH_EXPANDED;
+    setPanelPosition({
+      top: PANEL_MIN_TOP,
+      left: Math.max(PANEL_MIN_LEFT, window.innerWidth - initialWidth - PANEL_MIN_LEFT),
+    });
+  }, [isMounted, isPanelCollapsed]);
 
 
   const handleTogglePanelCollapse = useCallback(() => {
@@ -120,13 +126,16 @@ export function ReflectFlowOverlay() {
         const newWidth = newCollapsed ? PANEL_WIDTH_COLLAPSED : PANEL_WIDTH_EXPANDED;
 
         setPanelPosition(currentPos => {
+            if (!currentPos) return null; // Should not happen if mounted
             let newLeft = currentPos.left;
-            if (currentPos.left + oldWidth >= window.innerWidth - PANEL_MIN_LEFT - 20) {
-                newLeft = window.innerWidth - newWidth - PANEL_MIN_LEFT;
-            }
-            newLeft = Math.max(PANEL_MIN_LEFT, newLeft);
-            if (newLeft + newWidth + PANEL_MIN_LEFT > window.innerWidth) {
-                newLeft = window.innerWidth - newWidth - PANEL_MIN_LEFT;
+            if (typeof window !== 'undefined') {
+                if (currentPos.left + oldWidth >= window.innerWidth - PANEL_MIN_LEFT - 20) {
+                    newLeft = window.innerWidth - newWidth - PANEL_MIN_LEFT;
+                }
+                newLeft = Math.max(PANEL_MIN_LEFT, newLeft);
+                if (newLeft + newWidth + PANEL_MIN_LEFT > window.innerWidth) {
+                    newLeft = window.innerWidth - newWidth - PANEL_MIN_LEFT;
+                }
             }
             return { ...currentPos, left: newLeft };
         });
@@ -135,17 +144,21 @@ export function ReflectFlowOverlay() {
   }, []);
 
   const handleMouseMoveDraggable = useCallback((event: MouseEvent) => {
-    if (!isDraggingRef.current) return;
+    if (!isDraggingRef.current || !currentPanelPositionRef.current) return;
     event.preventDefault();
 
     let newTop = event.clientY - dragStartOffsetRef.current.y;
     let newLeft = event.clientX - dragStartOffsetRef.current.x;
 
     const panelWidth = panelCardRef.current?.offsetWidth || (isPanelCollapsed ? PANEL_WIDTH_COLLAPSED : PANEL_WIDTH_EXPANDED);
-    const panelHeight = panelCardRef.current?.offsetHeight || window.innerHeight;
+    const panelHeight = panelCardRef.current?.offsetHeight || (typeof window !== 'undefined' ? window.innerHeight : 600);
 
-    newTop = Math.max(PANEL_MIN_TOP, Math.min(newTop, window.innerHeight - panelHeight - PANEL_MIN_TOP));
-    newLeft = Math.max(PANEL_MIN_LEFT, Math.min(newLeft, window.innerWidth - panelWidth - PANEL_MIN_LEFT));
+
+    if (typeof window !== 'undefined') {
+        newTop = Math.max(PANEL_MIN_TOP, Math.min(newTop, window.innerHeight - panelHeight - PANEL_MIN_TOP));
+        newLeft = Math.max(PANEL_MIN_LEFT, Math.min(newLeft, window.innerWidth - panelWidth - PANEL_MIN_LEFT));
+    }
+
 
     setPanelPosition({ top: newTop, left: newLeft });
   }, [isPanelCollapsed]);
@@ -160,6 +173,8 @@ export function ReflectFlowOverlay() {
     if ((event.target as HTMLElement).closest('button, input, [role="button"], [role="menuitem"], [role="option"], [data-command-input="true"], [data-command-item="true"], textarea, [aria-label~="Drag"]')) {
         return;
     }
+    if (!currentPanelPositionRef.current) return; // Guard against null position
+
     event.preventDefault();
     setIsDragging(true);
     setDragStartOffset({
@@ -229,7 +244,7 @@ export function ReflectFlowOverlay() {
         timeout: 5000,
         ...(commandInfo.defaultParams || {}),
         ...params, 
-    } as Step; // Added 'as Step' to satisfy stricter type checking after Omit
+    } as Step; 
 
 
     setRecordedSteps(prevSteps => [...prevSteps, newStep]);
@@ -265,15 +280,11 @@ export function ReflectFlowOverlay() {
     const target = event.target as HTMLElement;
     if (!target || !target.tagName || target === document.body || target === document.documentElement) return;
     
-    // If the click is on an input/select, the specific handlers (focusOut, change) will manage it.
-    // This click handler should ignore clicks that are part of initiating those actions.
     if (target.matches('input, textarea, select')) {
-        // Let specific handlers like focusOut for inputs or change for selects handle these.
-        // However, clicks on checkboxes and radios should still be recorded as clicks.
         if (target.matches('input[type="checkbox"], input[type="radio"]')) {
            // Proceed to record click for these
         } else {
-           checkUrlChangeAfterDelay(); // Still check for URL change if click was on other input types
+           checkUrlChangeAfterDelay(); 
            return; 
         }
     }
@@ -686,8 +697,8 @@ export function ReflectFlowOverlay() {
 
   const panelWidthClass = isPanelCollapsed ? `w-[${PANEL_WIDTH_COLLAPSED}px]` : `w-[${PANEL_WIDTH_EXPANDED}px]`;
 
-  if (panelPosition.left === -9999 && typeof window !== 'undefined') {
-    return null;
+  if (!isMounted || !panelPosition) {
+    return null; 
   }
 
   return (
@@ -717,7 +728,7 @@ export function ReflectFlowOverlay() {
                 </div>
               </div>
             )}
-            {isPanelCollapsed && <div className="w-6 h-6"></div>} {/* Placeholder to maintain height */}
+            {isPanelCollapsed && <div className="w-6 h-6"></div>} 
           </div>
           <div className={`mt-4 ${isPanelCollapsed ? 'flex justify-center' : ''}`}>
             <HeaderControls
@@ -756,7 +767,7 @@ export function ReflectFlowOverlay() {
         )}
       </Card>
 
-      {isElementSelectorActive && inspectIconTarget && !isElementContextMenuOpen && !isDragging && (() => {
+      {isElementSelectorActive && inspectIconTarget && !isElementContextMenuOpen && !isDragging && typeof window !== 'undefined' && (() => {
           const rect = inspectIconTarget.getBoundingClientRect();
           const iconSize = 32;
           let iconTop = rect.top + rect.height / 2 - iconSize / 2;
@@ -795,3 +806,5 @@ export function ReflectFlowOverlay() {
     </div>
   );
 }
+
+    
