@@ -419,13 +419,12 @@ export function ReflectFlowOverlay() {
       ...(commandInfo.defaultParams || {})
     } as Step; // Cast to Step initially, specific props will be added based on command
 
-    // Initialize required and optional params for the specific command
     const allParamsFromCmd = [...commandInfo.requiredParams, ...commandInfo.optionalParams];
     allParamsFromCmd.forEach(paramDefString => {
         const namePart = paramDefString.split(':')[0].replace('...', '').replace('?', '').trim();
         const typePart = (paramDefString.split(':')[1] || 'string').trim().toLowerCase();
         
-        if (!(namePart in newStep)) { // Only if not already set by defaultParams
+        if (!(namePart in newStep)) { 
             if (typePart.includes('string') || typePart.includes('function') || typePart.includes('object') || typePart.includes('array')) {
                 (newStep as any)[namePart] = '';
             } else if (typePart.includes('number')) {
@@ -433,12 +432,11 @@ export function ReflectFlowOverlay() {
             } else if (typePart.includes('boolean')) {
                 (newStep as any)[namePart] = false;
             } else {
-                 (newStep as any)[namePart] = ''; // Fallback
+                 (newStep as any)[namePart] = ''; 
             }
         }
     });
     
-    // Example: For 'getAttribute', the 'attributeName' field needs to be initialized if not present from defaultParams
     if (commandInfo.key === 'getAttribute' && !('attributeName' in newStep)) {
         (newStep as WaitForElementStep).attributeName = '';
     }
@@ -461,8 +459,8 @@ export function ReflectFlowOverlay() {
     const newStep: UndeterminedStep = {
         id: baseId,
         type: 'undetermined',
-        description: 'New Step - Choose Command',
         badgeLabel: 'New Step',
+        description: 'New Step - Choose Command',
         target: 'main',
         timeout: 5000,
         selectors: [''],
@@ -488,7 +486,6 @@ export function ReflectFlowOverlay() {
         userAgent: navigator.userAgent,
       }
     };
-    // Simulate saving by logging to console and to localStorage
     console.log("Saving session:", JSON.stringify(sessionToSave, null, 2));
     try {
       localStorage.setItem('reflectFlowSession', JSON.stringify(sessionToSave));
@@ -655,3 +652,5 @@ export function ReflectFlowOverlay() {
     </div>
   );
 }
+
+    
