@@ -2,14 +2,14 @@
 "use client";
 
 import { Button } from '@/components/ui/button';
-import { RecordIcon, PauseIcon, SaveIcon, TargetIcon, ChevronUpIcon, ChevronDownIcon, DownloadIcon } from './icons';
+import { RecordIcon, PauseIcon, SaveIcon, InspectIcon, ChevronUpIcon, ChevronDownIcon, DownloadIcon } from './icons'; // Changed TargetIcon to InspectIcon
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface HeaderControlsProps {
   isRecording: boolean;
   onToggleRecording: () => void;
   onSaveSession: () => void;
-  onExportSession: () => void; // New prop
+  onExportSession: () => void;
   stepCount: number;
   isElementSelectorActive: boolean;
   onToggleElementSelector: () => void;
@@ -21,7 +21,7 @@ export function HeaderControls({
   isRecording,
   onToggleRecording,
   onSaveSession,
-  onExportSession, // Destructure new prop
+  onExportSession,
   stepCount,
   isElementSelectorActive,
   onToggleElementSelector,
@@ -85,7 +85,7 @@ export function HeaderControls({
                 className="h-9 w-9"
                 disabled={isRecording && !isPanelCollapsed}
               >
-                <TargetIcon className="h-4 w-4" />
+                <InspectIcon className="h-4 w-4" /> {/* Changed TargetIcon to InspectIcon */}
               </Button>
             </TooltipTrigger>
             <TooltipContent>

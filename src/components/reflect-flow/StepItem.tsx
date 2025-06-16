@@ -43,7 +43,7 @@ import {
   ChevronsUpDownIcon, 
   ListChecksIcon, 
   WatchIcon, 
-  TargetIcon,
+  InspectIcon, // Changed TargetIcon to InspectIcon
 } from './icons';
 import {
   DropdownMenu,
@@ -508,7 +508,7 @@ export function StepItem({ step, initialExpanded = false, onUpdateStep, onDelete
                 <div className="col-span-2 flex items-center gap-1">
                   <Input
                     id={`selector-${editableStep.id}-${index}`}
-                    placeholder={showPickSelectorButton && index === 0 ? "Click target icon to pick..." : (index === 0 ? "Primary Selector (CSS, XPath)" : "Alternative Selector")}
+                    placeholder={showPickSelectorButton && index === 0 ? "Click inspect icon to pick..." : (index === 0 ? "Primary Selector (CSS, XPath)" : "Alternative Selector")}
                     value={sel}
                     onChange={(e) => handleSelectorChange(index, e.target.value)}
                     className="text-sm h-8 flex-grow"
@@ -525,7 +525,7 @@ export function StepItem({ step, initialExpanded = false, onUpdateStep, onDelete
                           className="h-7 w-7 p-0 flex-shrink-0" 
                           aria-label="Pick selector from page"
                         >
-                          <TargetIcon className="h-4 w-4 text-primary" />
+                          <InspectIcon className="h-4 w-4 text-primary" /> {/* Changed TargetIcon to InspectIcon */}
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent>

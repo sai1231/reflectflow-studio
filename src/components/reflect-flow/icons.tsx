@@ -24,10 +24,11 @@ import {
   ClipboardCheck,
   AlertTriangle,
   CircleDot,
-  Target,
+  // Target, // TargetIcon is being replaced by InspectIcon
+  Inspect, // New Icon for element selection
   ChevronRight,
   Watch,
-  CheckCircle2 as LucideCheckCircle2,
+  CheckCircle2 as LucideCheckCircle2Import, // Aliased to avoid conflict
   PlayCircle,
   X,
   PlusSquare,
@@ -38,7 +39,7 @@ import {
   ListChecks as LucideListChecks,
   Sigma as LucideSigma,
   Maximize2,
-  Tags as LucideTagsImport, // Aliased to avoid conflict if TagsIcon is defined later differently
+  Tags as LucideTagsImport,
   LocateFixed,
   FileCode as LucideFileCode,
   Move,
@@ -57,7 +58,7 @@ import {
   ChevronsUpDown,
   PauseCircle,
   Bug,
-  Download as LucideDownload, // Added Download icon
+  Download as LucideDownload,
 } from 'lucide-react';
 
 export const RecordIcon = CircleDot;
@@ -83,7 +84,8 @@ export const FileIcon = FileText;
 export const CopyIcon = Copy;
 export const PasteIcon = ClipboardCheck;
 export const WarningIcon = AlertTriangle;
-export const TargetIcon = Target;
+// export const TargetIcon = Target; // Replaced by InspectIcon
+export const InspectIcon = Inspect; // New icon for element selection
 export const SubMenuArrowIcon = ChevronRight;
 export const WaitIcon = Watch;
 export const AssertionIcon = LucideListChecks;
@@ -96,14 +98,14 @@ export const AddValueIcon = PlusSquare;
 export const ClearValueIcon = Eraser;
 export const GetAttributeIcon = AtSign;
 export const IsEnabledIcon = ToggleRight;
-export const IsExistingIcon = LucideCheckCircle2; // Exported as IsExistingIcon
-export const CheckCircle2 = LucideCheckCircle2; // Exported as CheckCircle2 for ElementHoverPopup
+export const IsExistingIcon = LucideCheckCircle2Import;
+export const CheckCircle2 = LucideCheckCircle2Import;
 export const GetTextIcon = WholeWord;
 export const GetPropertyIcon = LucideSigma;
 export const GetSizeIcon = Maximize2;
-export const TagsIcon = LucideTagsImport; // Exported as TagsIcon for ElementHoverPopup
+export const TagsIcon = LucideTagsImport;
 export const GetLocationIcon = LocateFixed;
-export const GetHtmlIcon = LucideFileCode; // this was LucideFileCode
+export const GetHtmlIcon = LucideFileCode;
 export const MoveToIcon = Move;
 export const SaveScreenshotIcon = Camera;
 export const TouchActionIcon = LucideHand;
@@ -124,7 +126,7 @@ export const ChevronDownIcon = ChevronDown;
 export const HelpCircleIcon = HelpCircle;
 
 // New Icons from latest request / existing
-export const FileCodeIcon = LucideFileCode; // Explicitly exporting to ensure it's available
+export const FileCodeIcon = LucideFileCode;
 export const ChevronsUpDownIcon = ChevronsUpDown;
 export const PauseCircleIcon = PauseCircle;
 export const BugIcon = Bug;
@@ -133,5 +135,4 @@ export const HandIcon = LucideHand;
 export const WatchIcon = Watch;
 export const Sigma = LucideSigma;
 
-export const DownloadIcon = LucideDownload; // Exporting the Download icon
-
+export const DownloadIcon = LucideDownload;

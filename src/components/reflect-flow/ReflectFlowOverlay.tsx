@@ -10,7 +10,7 @@ import { StepList } from './StepList';
 import { ElementHoverPopup } from './ElementHoverPopup';
 import { HighlightOverlay } from './HighlightOverlay';
 import { useToast } from '@/hooks/use-toast';
-import { FileIcon, TargetIcon, AddIcon } from './icons';
+import { FileIcon, InspectIcon, AddIcon } from './icons'; // Changed TargetIcon to InspectIcon
 import { CommandInfo, findCommandByKey, availableCommands } from '@/lib/commands';
 import { arrayMove } from '@dnd-kit/sortable';
 
@@ -39,7 +39,17 @@ const generateElementInfo = (element: HTMLElement): ElementInfoForPopup => {
   const generatedSelectors: string[] = [];
   const addUniqueSelector = (selector: string) => {
     if (selector && !generatedSelectors.includes(selector) && generatedSelectors.length < 4) {
-      generatedSelectors.push(selector);
+      try {
+        if (!selector.startsWith("//") && document.querySelector(selector) === element) { // Basic validation for CSS
+             generatedSelectors.push(selector);
+        } else if (selector.startsWith("//")) { // For XPath, less direct validation here, assume correctness
+            // A more robust XPath validation would be complex and slow here.
+            // We can rely on the generation logic to be sound.
+            generatedSelectors.push(selector);
+        }
+      } catch (e) {
+        // Invalid selector syntax, ignore
+      }
     }
   };
 
@@ -58,40 +68,40 @@ const generateElementInfo = (element: HTMLElement): ElementInfoForPopup => {
   if (element.dataset.testid) {
     addUniqueSelector(`${element.tagName.toLowerCase()}[data-testid="${CSS.escape(element.dataset.testid)}"]`);
   }
-
+  
   // 4. Role and ARIA label CSS Selectors
   const role = element.getAttribute('role');
   const ariaLabel = element.getAttribute('aria-label');
+  const ariaLabelledby = element.getAttribute('aria-labelledby');
 
-  if (role && ariaLabel) {
-    addUniqueSelector(`${element.tagName.toLowerCase()}[role="${CSS.escape(role)}"][aria-label="${CSS.escape(ariaLabel)}"]`);
-  } else if (role) {
-    addUniqueSelector(`${element.tagName.toLowerCase()}[role="${CSS.escape(role)}"]`);
-  } else if (ariaLabel) {
-    addUniqueSelector(`${element.tagName.toLowerCase()}[aria-label="${CSS.escape(ariaLabel)}"]`);
+  if (role) {
+    if (ariaLabel) addUniqueSelector(`${element.tagName.toLowerCase()}[role="${CSS.escape(role)}"][aria-label="${CSS.escape(ariaLabel)}"]`);
+    else if (ariaLabelledby) addUniqueSelector(`${element.tagName.toLowerCase()}[role="${CSS.escape(role)}"][aria-labelledby="${CSS.escape(ariaLabelledby)}"]`);
+    else addUniqueSelector(`${element.tagName.toLowerCase()}[role="${CSS.escape(role)}"]`);
+  } else {
+    if (ariaLabel) addUniqueSelector(`${element.tagName.toLowerCase()}[aria-label="${CSS.escape(ariaLabel)}"]`);
+    else if (ariaLabelledby) addUniqueSelector(`${element.tagName.toLowerCase()}[aria-labelledby="${CSS.escape(ariaLabelledby)}"]`);
   }
   
   // 5. XPath with specific attributes (ID, name, class, then text/aria-label)
   let xpath = `//${element.tagName.toLowerCase()}`;
   if (element.id) {
-    xpath = `//${element.tagName.toLowerCase()}[@id='${CSS.escape(element.id)}']`;
+    xpath = `//${element.tagName.toLowerCase()}[@id='${element.id.replace(/'/g, `''`)}']`;
   } else if (nameAttr) {
-      xpath = `//${element.tagName.toLowerCase()}[@name='${CSS.escape(nameAttr)}']`;
+      xpath = `//${element.tagName.toLowerCase()}[@name='${nameAttr.replace(/'/g, `''`)}']`;
   } else {
-    // Attempt to use significant class if no ID or name
     const significantClassForXpath = Array.from(element.classList)
       .find(c => !/^(bg-|text-|border-|p-|m-|flex|grid|item|justify|self-|gap-|rounded|shadow-|w-|h-)/.test(c) && c.trim() !== '');
     if (significantClassForXpath) {
         xpath += `[contains(@class, '${CSS.escape(significantClassForXpath)}')]`;
     }
 
-    // Add text content or aria-label to XPath for more specificity if it's simple and no id/name was used for the base XPath
-    const textContent = element.textContent?.trim();
-    if (['button', 'a', 'span', 'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'div'].includes(element.tagName.toLowerCase()) && 
+    const textContent = element.textContent?.trim().replace(/\s+/g, ' ');
+    if (['button', 'a', 'span', 'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'div', 'label', 'legend', 'option', 'td', 'th'].includes(element.tagName.toLowerCase()) && 
         textContent && textContent.length > 0 && textContent.length < 50 && !element.children.length) {
-      xpath += `[normalize-space()="${textContent.replace(/"/g, "'")}"]`;
+      xpath += `[normalize-space()="${textContent.replace(/"/g, `''`)}"]`;
     } else if (ariaLabel) {
-      xpath += `[@aria-label="${ariaLabel.replace(/"/g, "'")}"]`;
+      xpath += `[@aria-label="${ariaLabel.replace(/"/g, `''`)}"]`;
     }
   }
   addUniqueSelector(xpath);
@@ -99,14 +109,14 @@ const generateElementInfo = (element: HTMLElement): ElementInfoForPopup => {
   // 6. CSS Selector with classes
   let classCssSelector = element.tagName.toLowerCase();
   const significantClasses = Array.from(element.classList)
-    .filter(c => c.trim() !== '' && !/^(bg-|text-|border-|p-|m-|flex|grid|item|justify|self-|gap-|rounded|shadow-|w-|h-)/.test(c))
+    .filter(c => c.trim() !== '' && !/^(bg-|text-|border-|p-|m-|flex|grid|item|justify|self-|gap-|rounded|shadow-|w-|h-|sr-only|hidden|block|inline|absolute|relative|fixed|top-|bottom-|left-|right-|z-)/.test(c))
     .map(c => CSS.escape(c));
   
   if (significantClasses.length > 0) {
-    classCssSelector += `.${significantClasses.join('.')}`;
+    classCssSelector += `.${significantClasses.slice(0, 3).join('.')}`; // Limit to 3 classes for brevity
     addUniqueSelector(classCssSelector);
-  } else {
-    // If no "significant" classes, try with the first available class for a bit more specificity than just tag
+  } else if (element.classList.length > 0) {
+    // If no "significant" classes, try with the first available class
     const firstClass = Array.from(element.classList).find(c => c.trim() !== '');
     if (firstClass) {
       classCssSelector += `.${CSS.escape(firstClass)}`;
@@ -115,22 +125,23 @@ const generateElementInfo = (element: HTMLElement): ElementInfoForPopup => {
   }
 
   // 7. Basic TagName if still not enough selectors
-  if (generatedSelectors.length < 4 && !generatedSelectors.includes(element.tagName.toLowerCase())) {
+  if (generatedSelectors.length < 4 && !generatedSelectors.find(s => s.toLowerCase() === element.tagName.toLowerCase() && !s.includes('[') && !s.includes('.') && !s.includes(':'))) {
       addUniqueSelector(element.tagName.toLowerCase());
   }
 
-  // Ensure there's at least one selector, fallback to tagName if all else fails
+  // Fallback to simple XPath if nothing else worked
   if (generatedSelectors.length === 0) {
-    generatedSelectors.push(element.tagName.toLowerCase());
+    generatedSelectors.push(`//${element.tagName.toLowerCase()}`);
   }
 
   // Populate fields for display in popup
   const idForDisplayRaw = element.id || undefined;
-  // Find a good CSS selector for display: prefer class-based, then ID, then tag
+  
   const cssSelectorForDisplay = 
+    generatedSelectors.find(s => s.startsWith("#")) || // ID first
     generatedSelectors.find(s => s.includes('.') && !s.startsWith("//")) || // Class-based
-    generatedSelectors.find(s => s.startsWith("#")) || // ID
-    generatedSelectors.find(s => !s.startsWith("//") && !s.includes("[") && !s.includes(":")) || // Simple tag
+    generatedSelectors.find(s => s.includes('[') && !s.startsWith("//")) || // Attribute based
+    generatedSelectors.find(s => !s.startsWith("//") && !s.includes("[") && !s.includes(".") && !s.includes(":")) || // Simple tag
     generatedSelectors.find(s => !s.startsWith("//")) || // Any other CSS
     element.tagName.toLowerCase();
   
@@ -141,7 +152,7 @@ const generateElementInfo = (element: HTMLElement): ElementInfoForPopup => {
     cssSelectorForDisplay: cssSelectorForDisplay,
     xpathForDisplay: xpathForDisplay,
     tagName: element.tagName.toLowerCase(),
-    generatedSelectors: generatedSelectors
+    generatedSelectors: generatedSelectors.slice(0, 4) // Ensure max 4
   };
 };
 
@@ -191,14 +202,14 @@ export function ReflectFlowOverlay() {
     if (!isMounted || typeof window === 'undefined') return;
 
     const initialWidth = isPanelCollapsed ? PANEL_WIDTH_COLLAPSED : PANEL_WIDTH_EXPANDED;
-    if (!panelPosition) { // Only set initial position if not already set (e.g. by dragging)
+    if (!panelPosition) { 
       setPanelPosition({
         top: PANEL_MIN_TOP,
         left: Math.max(PANEL_MIN_LEFT, window.innerWidth - initialWidth - PANEL_MIN_LEFT),
       });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isMounted, isPanelCollapsed]); // Removed panelPosition from dependencies to avoid re-calculating on drag
+  }, [isMounted, isPanelCollapsed]); 
 
 
   const handleTogglePanelCollapse = useCallback(() => {
@@ -211,10 +222,12 @@ export function ReflectFlowOverlay() {
             if (!currentPos) return null; 
             let newLeft = currentPos.left;
             if (typeof window !== 'undefined') {
-                if (currentPos.left + oldWidth >= window.innerWidth - PANEL_MIN_LEFT - 20) {
+                // If panel is near the right edge, adjust its left position to stay on screen after width change
+                if (currentPos.left + oldWidth >= window.innerWidth - PANEL_MIN_LEFT - 20) { // 20 is a small buffer
                     newLeft = window.innerWidth - newWidth - PANEL_MIN_LEFT;
                 }
-                newLeft = Math.max(PANEL_MIN_LEFT, newLeft);
+                newLeft = Math.max(PANEL_MIN_LEFT, newLeft); // Ensure it doesn't go off the left edge
+                 // If panel is too wide for its current left position, adjust it
                 if (newLeft + newWidth + PANEL_MIN_LEFT > window.innerWidth) {
                     newLeft = window.innerWidth - newWidth - PANEL_MIN_LEFT;
                 }
@@ -478,7 +491,6 @@ export function ReflectFlowOverlay() {
 
 
   const handleMouseOverForSelectorModes = useCallback((event: MouseEvent) => {
-    // This function now serves both ElementSelectorActive and PickingSelectorForStepId modes for highlighting
     if ((!isElementSelectorActive && !pickingSelectorForStepId) || isElementContextMenuOpen || isDraggingRef.current) return;
     
     const target = event.target as HTMLElement;
@@ -505,15 +517,14 @@ export function ReflectFlowOverlay() {
       clearTimeout(hoverTimerRef.current);
     }
 
-    // Delay highlighting slightly
     hoverTimerRef.current = setTimeout(() => {
       setHighlightedElementDetails({ element: target, info: generateElementInfo(target) });
-      if (isElementSelectorActive && !pickingSelectorForStepId) { // Only show inspect icon in general selector mode
+      if (isElementSelectorActive && !pickingSelectorForStepId) { 
         setInspectIconTarget(target);
       } else {
-        setInspectIconTarget(null); // No icon when picking for a step
+        setInspectIconTarget(null); 
       }
-    }, pickingSelectorForStepId ? 50 : 500); // Shorter delay if just picking for step
+    }, pickingSelectorForStepId ? 50 : 500); 
   }, [isElementSelectorActive, pickingSelectorForStepId, isElementContextMenuOpen]);
 
 
@@ -523,17 +534,12 @@ export function ReflectFlowOverlay() {
       clearTimeout(hoverTimerRef.current);
       hoverTimerRef.current = null;
     }
-    // Do not clear highlight immediately on mouseout if picking, only if timer was cleared
-    if (!pickingSelectorForStepId) {
-       // setHighlightedElementDetails(null); 
-       // setInspectIconTarget(null);
-    }
   }, [isElementSelectorActive, pickingSelectorForStepId, isElementContextMenuOpen]);
 
 
   const handleInspectIconClick = useCallback((event: React.MouseEvent, pageElement: HTMLElement) => {
     event.stopPropagation();
-    if (pickingSelectorForStepId) return; // Do not open context menu if picking for step
+    if (pickingSelectorForStepId) return; 
 
     const elementInfoForMenu = highlightedElementDetails && highlightedElementDetails.element === pageElement
       ? highlightedElementDetails.info
@@ -550,7 +556,6 @@ export function ReflectFlowOverlay() {
   const closeElementContextMenu = useCallback(() => {
     setIsElementContextMenuOpen(false);
     setCurrentContextMenuElementInfo(null);
-    // Do not clear highlight or inspect target if element selector is still active generally
     if (!isElementSelectorActive) {
         setHighlightedElementDetails(null);
         setInspectIconTarget(null);
@@ -579,7 +584,7 @@ export function ReflectFlowOverlay() {
 
     if (isAnySelectorModeActive) {
       document.addEventListener('keydown', handleKeyDown);
-      if (!isElementContextMenuOpen) { // Context menu takes precedence for mouse events if open
+      if (!isElementContextMenuOpen) { 
         document.addEventListener('mouseover', handleMouseOverForSelectorModes);
         document.addEventListener('mouseout', handleMouseOutForSelectorModes);
       } else {
@@ -607,13 +612,12 @@ export function ReflectFlowOverlay() {
   }, [isElementSelectorActive, pickingSelectorForStepId, isElementContextMenuOpen, handleMouseOverForSelectorModes, handleMouseOutForSelectorModes, toast, closeElementContextMenu]);
 
 
-  // Effect for handling clicks when pickingSelectorForStepId is active
   useEffect(() => {
     if (!pickingSelectorForStepId) return;
 
     const handleElementSelectionForStep = (event: MouseEvent) => {
       if (panelCardRef.current && panelCardRef.current.contains(event.target as Node)) {
-        return; // Click was inside the panel
+        return; 
       }
       
       event.preventDefault();
@@ -643,7 +647,7 @@ export function ReflectFlowOverlay() {
       setHighlightedElementDetails(null); 
     };
 
-    document.addEventListener('click', handleElementSelectionForStep, true); // Use capture phase
+    document.addEventListener('click', handleElementSelectionForStep, true); 
     return () => {
       document.removeEventListener('click', handleElementSelectionForStep, true);
     };
@@ -656,13 +660,13 @@ export function ReflectFlowOverlay() {
     setIsElementSelectorActive(newIsActive);
     if (newIsActive) {
       setIsRecording(false);
-      setPickingSelectorForStepId(null); // Ensure picking mode is off
+      setPickingSelectorForStepId(null); 
       setHighlightedElementDetails(null);
       setInspectIconTarget(null);
       setIsElementContextMenuOpen(false);
       toast({
         title: "Element Selector Activated",
-        description: "Hover over elements. Click target icon to open actions. Press ESC to deactivate.",
+        description: "Hover over elements. Click inspect icon to open actions. Press ESC to deactivate.",
       });
     } else {
       setHighlightedElementDetails(null);
@@ -680,9 +684,9 @@ export function ReflectFlowOverlay() {
   const handleInitiateSelectorPick = useCallback((stepId: string) => {
     setPickingSelectorForStepId(stepId);
     setIsRecording(false);
-    setIsElementSelectorActive(false); // Turn off general element selector mode
-    closeElementContextMenu(); // Close any open context menus
-    setHighlightedElementDetails(null); // Clear any existing highlight
+    setIsElementSelectorActive(false); 
+    closeElementContextMenu(); 
+    setHighlightedElementDetails(null); 
     setInspectIconTarget(null);
     toast({ title: "Pick an Element", description: "Click an element on the page to set its selectors for the step." });
   }, [toast, closeElementContextMenu]);
@@ -750,7 +754,7 @@ export function ReflectFlowOverlay() {
         description: 'New Step - Choose Command',
         target: 'main',
         timeout: 5000,
-        selectors: [''], // Initialize with one empty selector
+        selectors: [''], 
         selector: ''
     };
     setRecordedSteps(prev => [...prev, newStep]);
@@ -914,7 +918,6 @@ export function ReflectFlowOverlay() {
         )}
       </Card>
 
-      {/* Show TargetIcon for general element selection mode, but not when picking for a specific step */}
       {isElementSelectorActive && !pickingSelectorForStepId && inspectIconTarget && !isElementContextMenuOpen && !isDragging && typeof window !== 'undefined' && (() => {
           const rect = inspectIconTarget.getBoundingClientRect();
           const iconSize = 32;
@@ -937,7 +940,7 @@ export function ReflectFlowOverlay() {
                   onClick={(e) => handleInspectIconClick(e, inspectIconTarget)}
                   title="Inspect Element"
               >
-                  <TargetIcon className="h-4 w-4 text-primary" />
+                  <InspectIcon className="h-4 w-4 text-primary" /> {/* Changed TargetIcon to InspectIcon */}
               </Button>
           );
       })()}
@@ -950,7 +953,6 @@ export function ReflectFlowOverlay() {
         onClose={closeElementContextMenu}
       />
 
-      {/* Highlight overlay active in general element selector mode OR when picking selector for a step */}
       <HighlightOverlay targetElement={(isElementSelectorActive || !!pickingSelectorForStepId) && !isDragging ? (highlightedElementDetails?.element ?? null) : null} />
     </div>
   );
