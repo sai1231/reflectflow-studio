@@ -3,25 +3,25 @@
 
 import type React from 'react';
 import { useState, useEffect, useMemo, useRef } from 'react';
-import type { Step, ClickStep, TypeStep, NavigateStep, ScrollStep, WaitForElementStep, KeyDownStep, KeyUpStep, DoubleClickStep, MoveToStep, UndeterminedStep, StepType } from '@/types';
+import type { Step, StepType, NavigateStep, ClickStep, TypeStep, ScrollStep, WaitForElementStep, KeyDownStep, KeyUpStep, DoubleClickStep, MoveToStep, DragAndDropStep, ExecuteScriptStep, IsEqualStep, SaveScreenshotStep, SelectOptionStep, TouchActionStep, WaitUntilStep, PauseStep, DebugStep } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from '@/components/ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { CommandInfo, availableCommands } from '@/lib/commands';
+import { CommandInfo, availableCommands, findCommandByKey } from '@/lib/commands';
 
 import {
   ClickIcon,
   TypeActionIcon,
   NavigateIcon,
   ScrollIcon,
-  AssertIcon, 
+  AssertIcon,
   DeleteIcon,
   SaveIcon,
   DragHandleIcon,
@@ -30,9 +30,17 @@ import {
   ChevronUpIcon,
   KeyboardIcon,
   MoveToIcon,
-  ActionIcon, 
+  ActionIcon,
   HelpCircleIcon,
-} from './icons'; 
+  FileCodeIcon,
+  SaveScreenshotIcon, // Changed from CameraIcon
+  HandIcon,
+  PauseCircleIcon,
+  BugIcon,
+  ChevronsUpDownIcon,
+  ListChecksIcon,
+  WatchIcon,
+} from './icons';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -47,169 +55,171 @@ interface StepItemProps {
   onSelect: (id: string, selected: boolean) => void;
   onUpdateStep: (step: Step) => void;
   onDeleteStep: (id:string) => void;
-  onCommandSelected: (stepId: string) => void; 
+  onCommandSelected: (stepId: string) => void;
 }
 
-const getIconForStep = (type: Step['type']): React.ElementType => {
-  if (type === 'undetermined') return HelpCircleIcon;
+const getIconForStep = (type: StepType): React.ElementType => {
   switch (type) {
     case 'navigate': return NavigateIcon;
     case 'click': return ClickIcon;
-    case 'doubleClick': return DoubleClickIcon; 
+    case 'doubleClick': return ClickIcon; // DoubleClickIcon could be distinct if available/needed
     case 'type': return TypeActionIcon;
-    case 'keyDown': return KeyboardIcon;
-    case 'keyUp': return KeyboardIcon;
+    case 'keyDown': case 'keyUp': return KeyboardIcon;
     case 'scroll': return ScrollIcon;
     case 'waitForElement': return AssertIcon;
     case 'moveTo': return MoveToIcon;
-    default: return ActionIcon; 
+    case 'dragAndDrop': return HandIcon;
+    case 'executeScript': return FileCodeIcon;
+    case 'isEqual': return ChevronsUpDownIcon;
+    case 'saveScreenshot': return SaveScreenshotIcon; // Changed from CameraIcon
+    case 'selectOption': return ListChecksIcon;
+    case 'touchAction': return HandIcon;
+    case 'waitUntil': return WatchIcon;
+    case 'pause': return PauseCircleIcon;
+    case 'debug': return BugIcon;
+    case 'undetermined': return HelpCircleIcon;
+    default: return ActionIcon;
   }
 };
 
-const WAIT_OPERATORS = ['==', '!=', '<', '>', '<=', '>=', 'contains', 'not-contains', 'exists', 'stable', 'clickable'];
+interface ParamDefinition {
+  name: string;
+  type: 'string' | 'number' | 'boolean' | 'object' | 'array' | 'function' | 'string | function' | 'string | object | Array<object>' | 'string | WebdriverIO.Element' ;
+  isOptional: boolean;
+  fullDefinition: string;
+}
+
+const parseParamDefinition = (def: string, isOptional: boolean): ParamDefinition => {
+  const [namePart, typePart] = def.split(':').map(s => s.trim());
+  let type: ParamDefinition['type'] = 'string';
+  const cleanTypePart = typePart?.toLowerCase() || '';
+
+  if (cleanTypePart.includes('number')) type = 'number';
+  else if (cleanTypePart.includes('boolean')) type = 'boolean';
+  else if (cleanTypePart.includes('object') || cleanTypePart.includes('element')) type = 'object'; // Broader category for textarea
+  else if (cleanTypePart.includes('[]') || cleanTypePart.includes('array')) type = 'array'; // Broader category for textarea
+  else if (cleanTypePart.includes('function')) type = 'function'; // Broader category for textarea
+  else type = 'string';
+
+
+  return { name: namePart.replace('...', '').replace('?', ''), type, isOptional, fullDefinition: def };
+};
+
 
 export function StepItem({ step, isSelected, initialExpanded = false, onSelect, onUpdateStep, onDeleteStep, onCommandSelected }: StepItemProps) {
   const [editableStep, setEditableStep] = useState<Step>(() => JSON.parse(JSON.stringify(step)));
   const [isExpanded, setIsExpanded] = useState(initialExpanded || step.type === 'undetermined');
   const [commandSearch, setCommandSearch] = useState('');
   const [isCommandPopoverOpen, setIsCommandPopoverOpen] = useState(false);
-  
+
   const commandInputRef = useRef<HTMLInputElement>(null);
+
+  const currentStepCommandInfo = useMemo(() => {
+    if (editableStep.type === 'undetermined' || !editableStep.commandKey) return undefined;
+    return findCommandByKey(editableStep.commandKey);
+  }, [editableStep.type, editableStep.commandKey]);
+
 
   useEffect(() => {
     const newEditableStep = JSON.parse(JSON.stringify(step));
     if (editableStep.id !== newEditableStep.id || (editableStep.type === 'undetermined' && newEditableStep.type !== 'undetermined')) {
         setIsExpanded(initialExpanded || newEditableStep.type === 'undetermined');
-        setEditableStep(newEditableStep);
+    }
+    setEditableStep(newEditableStep);
+    if (newEditableStep.type === 'undetermined') {
         setCommandSearch('');
-    } else if (editableStep.id === newEditableStep.id && editableStep.type !== 'undetermined' && newEditableStep.type === 'undetermined') {
-        setEditableStep(newEditableStep);
-        setIsExpanded(true);
+        if (initialExpanded) { // If it's a new undetermined step, open popover
+             // setIsCommandPopoverOpen(true); // This might be too aggressive, consider button click
+        }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step, initialExpanded]); 
+  }, [step, initialExpanded]);
 
   const CurrentStepIcon = getIconForStep(editableStep.type);
 
   const filteredCommands = useMemo(() => {
     if (!commandSearch) return availableCommands;
-    return availableCommands.filter(cmd => 
+    return availableCommands.filter(cmd =>
       cmd.description.toLowerCase().includes(commandSearch.toLowerCase()) ||
       cmd.key.toLowerCase().includes(commandSearch.toLowerCase())
     );
   }, [commandSearch]);
 
   const handleCommandSelect = (selectedCmd: CommandInfo) => {
-    let newStepData: Partial<Step> = { description: selectedCmd.description };
-    let finalType: StepType = 'click'; 
-
-    switch (selectedCmd.key) {
-        case 'navigate':
-            finalType = 'navigate';
-            newStepData = { ...newStepData, url: 'https://' } as Partial<NavigateStep>;
-            break;
-        case 'click': finalType = 'click'; break;
-        case 'doubleClick': finalType = 'doubleClick'; break;
-        case 'type': case 'setValue':
-            finalType = 'type';
-            newStepData = { ...newStepData, value: 'your_text_here' } as Partial<TypeStep>;
-            break;
-        case 'addValue':
-            finalType = 'type';
-            newStepData = { ...newStepData, value: 'additional_text' } as Partial<TypeStep>;
-            break;
-        case 'clearValue':
-            finalType = 'type';
-            newStepData = { ...newStepData, value: '' } as Partial<TypeStep>;
-            break;
-        case 'keyDown': finalType = 'keyDown'; newStepData = { ...newStepData, key: 'Enter' } as Partial<KeyDownStep>; break;
-        case 'keyUp': finalType = 'keyUp'; newStepData = { ...newStepData, key: 'Enter' } as Partial<KeyUpStep>; break;
-        case 'scrollIntoView':
-            finalType = 'scroll';
-            newStepData = { ...newStepData, selectors: [''] } as Partial<ScrollStep>;
-            if (editableStep.selectors && editableStep.selectors[0] && editableStep.selectors[0].toLowerCase() === 'document') {
-              (newStepData as Partial<ScrollStep>).x = 0;
-              (newStepData as Partial<ScrollStep>).y = 0;
-            }
-            break;
-        case 'moveTo': finalType = 'moveTo'; break;
-        
-        case 'waitForElement': case 'isExisting': case 'waitForExist':
-            finalType = 'waitForElement';
-            newStepData = { ...newStepData, property: 'existing', operator: 'exists', expectedValue: true } as Partial<WaitForElementStep>;
-            break;
-        case 'isDisplayed': case 'waitForDisplayed':
-            finalType = 'waitForElement';
-            newStepData = { ...newStepData, property: 'visible', operator: '==', expectedValue: true } as Partial<WaitForElementStep>;
-            break;
-        case 'isEnabled': case 'waitForEnabled':
-            finalType = 'waitForElement';
-            newStepData = { ...newStepData, property: 'enabled', operator: '==', expectedValue: true } as Partial<WaitForElementStep>;
-            break;
-        case 'isClickable': case 'waitForClickable':
-            finalType = 'waitForElement';
-            newStepData = { ...newStepData, property: 'clickable', operator: 'clickable', expectedValue: true } as Partial<WaitForElementStep>;
-            break;
-        case 'isStable': case 'waitForStable':
-            finalType = 'waitForElement';
-            newStepData = { ...newStepData, property: 'stable', operator: 'stable', expectedValue: true } as Partial<WaitForElementStep>;
-            break;
-        case 'getText':
-            finalType = 'waitForElement';
-            newStepData = { ...newStepData, property: 'textContent', operator: 'contains', expectedValue: 'expected text' } as Partial<WaitForElementStep>;
-            break;
-        case 'getValue':
-            finalType = 'waitForElement';
-            newStepData = { ...newStepData, property: 'value', operator: '==', expectedValue: 'expected value' } as Partial<WaitForElementStep>;
-            break;
-        case 'getAttribute':
-            finalType = 'waitForElement';
-            newStepData = { ...newStepData, property: 'attribute:data-testid', operator: '==', expectedValue: 'attr_value' } as Partial<WaitForElementStep>;
-            break;
-        case 'getCSSProperty': newStepData = {...newStepData, property:'css:color', operator:'==', expectedValue:'#000000'}; finalType = 'waitForElement'; break;
-        case 'getSize': newStepData = {...newStepData, property:'size.width', operator:'>', expectedValue:0}; finalType = 'waitForElement'; break;
-        case 'getLocation': newStepData = {...newStepData, property:'location.x', operator:'>=', expectedValue:0}; finalType = 'waitForElement'; break;
-        
-        default: 
-             if (selectedCmd.key.toLowerCase().includes('get') || selectedCmd.key.toLowerCase().includes('is') || selectedCmd.key.toLowerCase().includes('wait')) {
-                finalType = 'waitForElement'; 
-                newStepData = { ...newStepData, property: 'visible', operator: '==', expectedValue: true };
-            } else if (Object.values(StepType).includes(selectedCmd.key as StepType)) {
-                finalType = selectedCmd.key as StepType;
-            }
-            else {
-                finalType = 'click';
-            }
-            break;
-    }
-
     const baseSelectors = editableStep.selectors || [''];
     const baseSelector = editableStep.selector || baseSelectors[0] || '';
+
+    let newStepData: Partial<Step> = {
+      type: selectedCmd.mapsToStepType,
+      commandKey: selectedCmd.key,
+      description: selectedCmd.description, // Set description from command
+      selectors: selectedCmd.isElementCommand ? baseSelectors : undefined,
+      selector: selectedCmd.isElementCommand ? baseSelector : undefined,
+      target: editableStep.target || 'main',
+      timeout: editableStep.timeout || 5000,
+      ...(selectedCmd.defaultParams || {})
+    };
+    
+    // Initialize required and optional params with default values
+    const allParams = [...selectedCmd.requiredParams, ...selectedCmd.optionalParams];
+    allParams.forEach(paramDef => {
+      const parsed = parseParamDefinition(paramDef, selectedCmd.optionalParams.includes(paramDef));
+      if (!(parsed.name in newStepData)) {
+        switch (parsed.type) {
+          case 'string':
+          case 'object':
+          case 'array':
+          case 'function':
+            (newStepData as any)[parsed.name] = ''; break;
+          case 'number': (newStepData as any)[parsed.name] = 0; break;
+          case 'boolean': (newStepData as any)[parsed.name] = false; break;
+        }
+      }
+    });
+    
+    // Specific handling from command's defaultParams (might override above)
+    // Example: clearValue should set value to ''
+    if (selectedCmd.defaultParams) {
+        newStepData = { ...newStepData, ...selectedCmd.defaultParams };
+    }
+
+    // Example for getAttribute/getCSSProperty if not covered by defaultParams
+    if (selectedCmd.key === 'getAttribute' && (newStepData as WaitForElementStep).attributeName) {
+       (newStepData as WaitForElementStep).property = `attribute:${(newStepData as WaitForElementStep).attributeName}`;
+    } else if (selectedCmd.key === 'getCSSProperty' && (newStepData as WaitForElementStep).cssProperty) {
+       (newStepData as WaitForElementStep).property = `css:${(newStepData as WaitForElementStep).cssProperty}`;
+    } else if (selectedCmd.key === 'getProperty' && (newStepData as WaitForElementStep).jsPropertyName) {
+       (newStepData as WaitForElementStep).property = `jsProperty:${(newStepData as WaitForElementStep).jsPropertyName}`;
+    }
+
 
     const fullyTypedStep = {
       ...editableStep,
       ...newStepData,
-      type: finalType,
-      selectors: baseSelectors,
-      selector: baseSelector,
     } as Step;
 
-    setEditableStep(fullyTypedStep); 
-    onUpdateStep(fullyTypedStep);   
+
+    setEditableStep(fullyTypedStep);
+    onUpdateStep(fullyTypedStep);
     setIsCommandPopoverOpen(false);
     setCommandSearch('');
     if (fullyTypedStep.type !== 'undetermined') {
-      onCommandSelected(fullyTypedStep.id); 
+      onCommandSelected(fullyTypedStep.id);
+      setIsExpanded(true);
     }
   };
 
-  const handleInputChange = (field: keyof Step, value: any) => {
-    setEditableStep(prev => ({ ...prev, [field]: value }));
+  const handleInputChange = (field: keyof Step | string, value: any) => {
+    setEditableStep(prev => ({ ...prev, [field]: value } as Step));
+  };
+
+  const handleNumericInputChange = (field: keyof Step | string, value: string) => {
+    const numValue = value === '' ? undefined : parseFloat(value);
+    setEditableStep(prev => ({ ...prev, [field]: numValue } as Step));
   };
   
-  const handleNumericInputChange = (field: keyof Step, value: string) => {
-    const numValue = value === '' ? undefined : parseFloat(value);
-    setEditableStep(prev => ({ ...prev, [field]: numValue }));
+  const handleCheckboxChange = (field: keyof Step | string, checked: boolean) => {
+    setEditableStep(prev => ({ ...prev, [field]: checked } as Step));
   };
 
   const handleSelectorChange = (index: number, value: string) => {
@@ -217,17 +227,17 @@ export function StepItem({ step, isSelected, initialExpanded = false, onSelect, 
       const newSelectors = [...(prev.selectors || [])];
       if (index < newSelectors.length) {
         newSelectors[index] = value;
-      } else if (index === newSelectors.length) { 
+      } else if (index === newSelectors.length) {
         newSelectors.push(value);
       }
       const primarySelector = newSelectors[0] || '';
       return { ...prev, selectors: newSelectors, selector: primarySelector };
     });
   };
-  
+
   const handleAddSelector = () => {
     setEditableStep(prev => {
-      const newSelectors = [...(prev.selectors || []), '']; 
+      const newSelectors = [...(prev.selectors || []), ''];
       return { ...prev, selectors: newSelectors };
     });
   };
@@ -235,7 +245,7 @@ export function StepItem({ step, isSelected, initialExpanded = false, onSelect, 
   const handleRemoveSelector = (index: number) => {
     setEditableStep(prev => {
       const newSelectors = [...(prev.selectors || [])];
-      if (newSelectors.length > 1 && index < newSelectors.length) { 
+      if (newSelectors.length > 1 && index < newSelectors.length) {
         newSelectors.splice(index, 1);
       }
       const primarySelector = newSelectors[0] || '';
@@ -249,18 +259,19 @@ export function StepItem({ step, isSelected, initialExpanded = false, onSelect, 
       finalStep.selector = finalStep.selectors[0];
     } else if (finalStep.selector && (!finalStep.selectors || finalStep.selectors.length === 0)) {
       finalStep.selectors = [finalStep.selector];
-    } else if (!finalStep.selector && (!finalStep.selectors || finalStep.selectors.length === 0)) {
-      const typesRequiringSelector = ['click', 'type', 'waitForElement', 'doubleClick', 'moveTo', 'scroll'];
-      const isDocumentScroll = finalStep.type === 'scroll' && (finalStep as ScrollStep).selectors?.[0]?.toLowerCase() === 'document';
-      
-      if (typesRequiringSelector.includes(finalStep.type) && !isDocumentScroll) {
-        finalStep.selectors = [''];
-        finalStep.selector = '';
-      }
     }
+    // Update property for specific get commands if not already set by handleCommandSelect
+    if (finalStep.commandKey === 'getAttribute' && (finalStep as WaitForElementStep).attributeName && !(finalStep as WaitForElementStep).property?.startsWith('attribute:')) {
+       (finalStep as WaitForElementStep).property = `attribute:${(finalStep as WaitForElementStep).attributeName}`;
+    } else if (finalStep.commandKey === 'getCSSProperty' && (finalStep as WaitForElementStep).cssProperty && !(finalStep as WaitForElementStep).property?.startsWith('css:')) {
+       (finalStep as WaitForElementStep).property = `css:${(finalStep as WaitForElementStep).cssProperty}`;
+    } else if (finalStep.commandKey === 'getProperty' && (finalStep as WaitForElementStep).jsPropertyName && !(finalStep as WaitForElementStep).property?.startsWith('jsProperty:')) {
+       (finalStep as WaitForElementStep).property = `jsProperty:${(finalStep as WaitForElementStep).jsPropertyName}`;
+    }
+
     onUpdateStep(finalStep);
   };
-  
+
   const handleDelete = () => {
     onDeleteStep(editableStep.id);
   };
@@ -268,31 +279,21 @@ export function StepItem({ step, isSelected, initialExpanded = false, onSelect, 
   const toggleExpand = () => {
     setIsExpanded(prev => !prev);
   };
-  
+
   const renderStepDetailsSummary = () => {
     const s = editableStep;
     if (s.type === 'undetermined') return <p className="text-xs text-muted-foreground truncate">Choose a command to define this step.</p>;
-    
-    const primarySelectorDisplay = s.selector || (s.selectors && s.selectors[0]) || (s.type !== 'navigate' && s.type !== 'scroll' && s.type !== 'keyDown' && s.type !== 'keyUp' ? 'N/A' : '');
 
-    switch (s.type) {
-      case 'navigate': return <p className="text-xs text-muted-foreground truncate" title={(s as NavigateStep).url}>URL: {(s as NavigateStep).url}</p>;
-      case 'click': case 'doubleClick': case 'moveTo': return <p className="text-xs text-muted-foreground truncate" title={primarySelectorDisplay}>Selector: {primarySelectorDisplay}</p>;
-      case 'type': return <p className="text-xs text-muted-foreground truncate" title={(s as TypeStep).value}>Value: {(s as TypeStep).value}</p>;
-      case 'keyDown': case 'keyUp': return <p className="text-xs text-muted-foreground truncate" title={(s as KeyDownStep).key}>Key: {(s as KeyDownStep).key}</p>;
-      case 'scroll':
-        const scrollStep = s as ScrollStep;
-        if (scrollStep.selectors && scrollStep.selectors[0] && scrollStep.selectors[0].toLowerCase() !== 'document') {
-          return <p className="text-xs text-muted-foreground truncate" title={scrollStep.selectors[0]}>Target: {scrollStep.selectors[0]}</p>;
-        }
-        return <p className="text-xs text-muted-foreground">Scroll Window: X: {scrollStep.x ?? 0}, Y: {scrollStep.y ?? 0}</p>;
-      case 'waitForElement':
-        const wfes = s as WaitForElementStep;
-        const valueDisplay = wfes.expectedValue !== undefined ? String(wfes.expectedValue) : '';
-        const summary = `${wfes.property || 'Element'} ${wfes.operator || 'exists'} ${valueDisplay ? `"${valueDisplay}"` : ''} on ${primarySelectorDisplay}`;
-        return <p className="text-xs text-muted-foreground truncate" title={summary}>Assert: {summary}</p>;
-      default: return primarySelectorDisplay ? <p className="text-xs text-muted-foreground truncate" title={primarySelectorDisplay}>Selector: {primarySelectorDisplay}</p> : null;
-    }
+    const primarySelectorDisplay = s.selector || (s.selectors && s.selectors[0]) || '';
+    let summaryText = s.description || s.type; // Fallback to type if description is empty
+
+    if (s.type === 'navigate' && 'url' in s) summaryText = `Navigate to: ${s.url || '...'}`;
+    else if (s.type === 'type' && 'value' in s) summaryText = `Type: "${s.value || '...'}" into ${primarySelectorDisplay || 'element'}`;
+    else if (s.type === 'scroll' && 'scrollType' in s && s.scrollType === 'window') summaryText = `Scroll window to X:${s.x ?? 0}, Y:${s.y ?? 0}`;
+    else if (primarySelectorDisplay && s.description) summaryText = `${s.description} on ${primarySelectorDisplay}`;
+    else if (s.description) summaryText = s.description;
+
+    return <p className="text-xs text-muted-foreground truncate" title={summaryText}>{summaryText}</p>;
   };
 
   const renderCommandSelector = () => (
@@ -300,91 +301,118 @@ export function StepItem({ step, isSelected, initialExpanded = false, onSelect, 
       <Label htmlFor={`cmd-select-trigger-${editableStep.id}`} className="text-sm font-medium">Choose Command</Label>
       <Popover open={isCommandPopoverOpen} onOpenChange={setIsCommandPopoverOpen}>
         <PopoverTrigger asChild>
-            <Button
-                id={`cmd-select-trigger-${editableStep.id}`}
-                variant="outline"
-                role="combobox"
-                aria-expanded={isCommandPopoverOpen}
-                className="w-full justify-between text-sm h-10"
-            >
-                {editableStep.description || "Select command..."} 
-                <ChevronDownIcon className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-            </Button>
+          <Button
+            id={`cmd-select-trigger-${editableStep.id}`}
+            variant="outline"
+            role="combobox"
+            aria-expanded={isCommandPopoverOpen}
+            className="w-full justify-between text-sm h-10"
+          >
+            {editableStep.description && editableStep.type !== 'undetermined' ? editableStep.description : "Select command..."}
+            <ChevronsUpDownIcon className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+          </Button>
         </PopoverTrigger>
-        <PopoverContent 
-            className="w-[calc(var(--radix-popover-trigger-width))] p-0 z-[10001]"
-            align="start" 
-            onOpenAutoFocus={(e) => {
-                e.preventDefault();
-                commandInputRef.current?.focus();
-            }}
-            onCloseAutoFocus={(e) => e.preventDefault()}
+        <PopoverContent
+          className="w-[calc(var(--radix-popover-trigger-width))] p-0 z-[10001]"
+          align="start"
+          onOpenAutoFocus={(e) => {
+            e.preventDefault();
+            commandInputRef.current?.focus();
+          }}
+          onCloseAutoFocus={(e) => e.preventDefault()}
         >
-            <Input
-                ref={commandInputRef}
-                data-command-input="true" 
-                placeholder="Type to search commands..."
-                value={commandSearch}
-                onChange={(e) => setCommandSearch(e.target.value)}
-                className="text-sm h-10 border-x-0 border-t-0 rounded-none focus-visible:ring-0" 
-            />
-            <ScrollArea className="h-[200px]">
+          <Input
+            ref={commandInputRef}
+            data-command-input="true"
+            placeholder="Type to search commands..."
+            value={commandSearch}
+            onChange={(e) => setCommandSearch(e.target.value)}
+            className="text-sm h-10 border-x-0 border-t-0 rounded-none focus-visible:ring-0"
+          />
+          <ScrollArea className="h-[200px]">
             {filteredCommands.length > 0 ? (
-                filteredCommands.map(cmd => (
+              filteredCommands.map(cmd => (
                 <div
-                    key={cmd.key}
-                    data-command-item="true" 
-                    className="p-2 hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground cursor-pointer text-sm outline-none"
-                    onClick={() => handleCommandSelect(cmd)}
-                    onKeyDown={(e) => { if (e.key === 'Enter') handleCommandSelect(cmd);}}
-                    tabIndex={0} 
+                  key={cmd.key}
+                  data-command-item="true"
+                  className="p-2 hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground cursor-pointer text-sm outline-none"
+                  onClick={() => handleCommandSelect(cmd)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleCommandSelect(cmd); }}
+                  tabIndex={0}
                 >
-                    {cmd.description} <span className="text-xs text-muted-foreground">({cmd.key})</span>
+                  {cmd.description} <span className="text-xs text-muted-foreground">({cmd.key})</span>
                 </div>
-                ))
+              ))
             ) : (
-                <p className="p-2 text-sm text-muted-foreground">No commands found.</p>
+              <p className="p-2 text-sm text-muted-foreground">No commands found.</p>
             )}
-            </ScrollArea>
+          </ScrollArea>
         </PopoverContent>
       </Popover>
     </div>
   );
 
-  const renderCommonFields = () => (
-    <>
-      {(editableStep.type !== 'navigate' && editableStep.type !== 'keyDown' && editableStep.type !== 'keyUp' && !(editableStep.type === 'scroll' && (editableStep as ScrollStep).selectors?.[0]?.toLowerCase() === 'document')) && (
-        <>
-          {(editableStep.selectors || ['']).map((sel, index) => (
-            <div key={index} className="grid grid-cols-3 gap-2 items-center">
-              <Label htmlFor={`selector-${editableStep.id}-${index}`} className="text-xs">{index === 0 ? 'Selector(s)' : `Alt. Sel. ${index}`}</Label>
-              <div className="col-span-2 flex items-center gap-1">
-                <Input
-                  id={`selector-${editableStep.id}-${index}`}
-                  placeholder={index === 0 ? "Primary Selector (CSS, XPath)" : "Alternative Selector"}
-                  value={sel}
-                  onChange={(e) => handleSelectorChange(index, e.target.value)}
-                  className="text-sm h-8 flex-grow"
-                />
-                {(editableStep.selectors || []).length > 1 && ( // Show remove only if more than one
-                   <Button type="button" variant="ghost" size="icon" onClick={() => handleRemoveSelector(index)} className="h-7 w-7 p-0 flex-shrink-0" aria-label="Remove selector">
-                    <DeleteIcon className="h-3 w-3" />
-                  </Button>
-                )}
-              </div>
-            </div>
-          ))}
-          <div className="grid grid-cols-3 gap-2 items-center">
-            <div></div> 
-            <div className="col-span-2">
-                <Button type="button" variant="outline" size="sm" onClick={handleAddSelector} className="h-7 text-xs mt-1 w-full">
-                Add Selector
-                </Button>
-            </div>
+ const renderDynamicParamInputs = () => {
+    if (!currentStepCommandInfo || editableStep.type === 'undetermined') return null;
+
+    const paramsToRender: ParamDefinition[] = [
+      ...currentStepCommandInfo.requiredParams.map(p => parseParamDefinition(p, false)),
+      ...currentStepCommandInfo.optionalParams.map(p => parseParamDefinition(p, true))
+    ];
+
+    return paramsToRender.map(param => {
+      const paramValue = (editableStep as any)[param.name];
+      const labelText = `${param.name.charAt(0).toUpperCase() + param.name.slice(1)}${param.isOptional ? '' : '*'}:`;
+
+      return (
+        <div key={param.name} className="grid grid-cols-3 gap-2 items-center">
+          <Label htmlFor={`${editableStep.id}-${param.name}`} className="text-xs" title={param.fullDefinition}>
+            {labelText}
+          </Label>
+          <div className="col-span-2">
+            {param.type === 'boolean' ? (
+              <Checkbox
+                id={`${editableStep.id}-${param.name}`}
+                checked={!!paramValue}
+                onCheckedChange={(checked) => handleCheckboxChange(param.name, !!checked)}
+              />
+            ) : param.type === 'number' ? (
+              <Input
+                id={`${editableStep.id}-${param.name}`}
+                type="number"
+                placeholder={`Enter ${param.name}`}
+                value={paramValue !== undefined ? String(paramValue) : ''}
+                onChange={(e) => handleNumericInputChange(param.name, e.target.value)}
+                className="text-sm h-8"
+              />
+            ) : (param.type === 'object' || param.type === 'array' || param.type === 'function') ? (
+               <Textarea
+                id={`${editableStep.id}-${param.name}`}
+                placeholder={`Enter ${param.name} (e.g., JSON string or script)`}
+                value={typeof paramValue === 'object' ? JSON.stringify(paramValue) : (paramValue !== undefined ? String(paramValue) : '')}
+                onChange={(e) => handleInputChange(param.name, e.target.value)}
+                className="text-sm h-20"
+                rows={2}
+              />
+            ) : (
+              <Input
+                id={`${editableStep.id}-${param.name}`}
+                type="text"
+                placeholder={`Enter ${param.name}`}
+                value={paramValue !== undefined ? String(paramValue) : ''}
+                onChange={(e) => handleInputChange(param.name, e.target.value)}
+                className="text-sm h-8"
+              />
+            )}
           </div>
-        </>
-      )}
-      <div className="grid grid-cols-3 gap-2 items-center">
+        </div>
+      );
+    });
+  };
+
+  const renderCommonFields = () => (
+     <div className="space-y-2">
+       <div className="grid grid-cols-3 gap-2 items-center">
         <Label htmlFor={`target-${editableStep.id}`} className="text-xs">Target</Label>
         <Input
           id={`target-${editableStep.id}`}
@@ -405,117 +433,53 @@ export function StepItem({ step, isSelected, initialExpanded = false, onSelect, 
           className="text-sm h-8 col-span-2"
         />
       </div>
-    </>
+     </div>
   );
-  
+
   const renderEditableFields = () => (
-    <div className="space-y-2 p-3 border-t mt-2 bg-muted/20 rounded-b-md">
+    <div className="space-y-3 p-3 border-t mt-2 bg-muted/20 rounded-b-md">
       {renderCommonFields()}
 
-      {editableStep.type === 'navigate' && (
-        <div className="grid grid-cols-3 gap-2 items-center">
-          <Label htmlFor={`url-${editableStep.id}`} className="text-xs">URL</Label>
-          <Input
-            id={`url-${editableStep.id}`}
-            placeholder="https://example.com"
-            value={(editableStep as NavigateStep).url}
-            onChange={(e) => handleInputChange('url', e.target.value)}
-            className="text-sm h-8 col-span-2"
-          />
-        </div>
-      )}
-
-      {(editableStep.type === 'keyDown' || editableStep.type === 'keyUp') && (
-        <div className="grid grid-cols-3 gap-2 items-center">
-          <Label htmlFor={`key-${editableStep.id}`} className="text-xs">Key</Label>
-          <Input
-            id={`key-${editableStep.id}`}
-            placeholder="e.g., Enter, a, Shift"
-            value={(editableStep as KeyDownStep).key}
-            onChange={(e) => handleInputChange('key', e.target.value)}
-            className="text-sm h-8 col-span-2"
-          />
-        </div>
-      )}
-
-      {editableStep.type === 'type' && (
-        <div className="grid grid-cols-3 gap-2 items-center">
-          <Label htmlFor={`value-${editableStep.id}`} className="text-xs">Value</Label>
-          <Input
-            id={`value-${editableStep.id}`}
-            placeholder="Text to type"
-            value={(editableStep as TypeStep).value}
-            onChange={(e) => handleInputChange('value', e.target.value)}
-            className="text-sm h-8 col-span-2"
-          />
-        </div>
-      )}
-
-      {editableStep.type === 'scroll' && (editableStep as ScrollStep).selectors?.[0]?.toLowerCase() === 'document' && (
-         <>
-         <div className="grid grid-cols-3 gap-2 items-center">
-            <Label htmlFor={`scrollX-${editableStep.id}`} className="text-xs">Scroll X</Label>
-            <Input id={`scrollX-${editableStep.id}`} type="number" placeholder="0" value={(editableStep as ScrollStep).x !== undefined ? String((editableStep as ScrollStep).x) : ''} onChange={(e) => handleNumericInputChange('x', e.target.value)} className="text-sm h-8 col-span-2"/>
-         </div>
-         <div className="grid grid-cols-3 gap-2 items-center">
-            <Label htmlFor={`scrollY-${editableStep.id}`} className="text-xs">Scroll Y</Label>
-            <Input id={`scrollY-${editableStep.id}`} type="number" placeholder="100" value={(editableStep as ScrollStep).y !== undefined ? String((editableStep as ScrollStep).y) : ''} onChange={(e) => handleNumericInputChange('y', e.target.value)} className="text-sm h-8 col-span-2"/>
-         </div>
-        </>
-      )}
-
-      {editableStep.type === 'waitForElement' && (
+      {currentStepCommandInfo?.isElementCommand && (
         <>
+          {(editableStep.selectors || ['']).map((sel, index) => (
+            <div key={index} className="grid grid-cols-3 gap-2 items-center">
+              <Label htmlFor={`selector-${editableStep.id}-${index}`} className="text-xs">{index === 0 ? 'Selector(s)*' : `Alt. Sel. ${index}`}</Label>
+              <div className="col-span-2 flex items-center gap-1">
+                <Input
+                  id={`selector-${editableStep.id}-${index}`}
+                  placeholder={index === 0 ? "Primary Selector (CSS, XPath)" : "Alternative Selector"}
+                  value={sel}
+                  onChange={(e) => handleSelectorChange(index, e.target.value)}
+                  className="text-sm h-8 flex-grow"
+                />
+                {(editableStep.selectors || []).length > 1 && (
+                  <Button type="button" variant="ghost" size="icon" onClick={() => handleRemoveSelector(index)} className="h-7 w-7 p-0 flex-shrink-0" aria-label="Remove selector">
+                    <DeleteIcon className="h-3 w-3" />
+                  </Button>
+                )}
+              </div>
+            </div>
+          ))}
           <div className="grid grid-cols-3 gap-2 items-center">
-            <Label htmlFor={`propName-${editableStep.id}`} className="text-xs">Property</Label>
-            <Input
-              id={`propName-${editableStep.id}`}
-              placeholder="e.g., visible, textContent"
-              value={(editableStep as WaitForElementStep).property || ''}
-              onChange={(e) => handleInputChange('property', e.target.value)}
-              className="text-sm h-8 col-span-2"
-            />
-          </div>
-          <div className="grid grid-cols-3 gap-2 items-center">
-            <Label htmlFor={`operator-${editableStep.id}`} className="text-xs">Operator</Label>
-             <Select
-                value={(editableStep as WaitForElementStep).operator || '=='}
-                onValueChange={(value) => handleInputChange('operator', value as WaitForElementStep['operator'])}
-              >
-                <SelectTrigger id={`operator-${editableStep.id}`} className="text-sm h-8 col-span-2">
-                  <SelectValue placeholder="Select operator" />
-                </SelectTrigger>
-                <SelectContent>
-                  {WAIT_OPERATORS.map(op => <SelectItem key={op} value={op}>{op}</SelectItem>)}
-                </SelectContent>
-              </Select>
-          </div>
-          <div className="grid grid-cols-3 gap-2 items-center">
-            <Label htmlFor={`propValue-${editableStep.id}`} className="text-xs">Expected Value</Label>
-            <Input
-              id={`propValue-${editableStep.id}`}
-              placeholder="true, some text, 123"
-              value={(editableStep as WaitForElementStep).expectedValue !== undefined ? String((editableStep as WaitForElementStep).expectedValue) : ''}
-              onChange={(e) => {
-                const valStr = e.target.value;
-                let val: string | number | boolean = valStr;
-                if (valStr.toLowerCase() === 'true') val = true;
-                else if (valStr.toLowerCase() === 'false') val = false;
-                else if (valStr === '' && ((editableStep as WaitForElementStep).operator === 'exists' || (editableStep as WaitForElementStep).operator === 'stable' || (editableStep as WaitForElementStep).operator === 'clickable')) val = true; 
-                else if (valStr !== '' && !isNaN(parseFloat(valStr)) && isFinite(Number(valStr))) val = parseFloat(valStr);
-                handleInputChange('expectedValue', val);
-              }}
-              className="text-sm h-8 col-span-2"
-            />
+            <div></div>
+            <div className="col-span-2">
+              <Button type="button" variant="outline" size="sm" onClick={handleAddSelector} className="h-7 text-xs mt-1 w-full">
+                Add Selector
+              </Button>
+            </div>
           </div>
         </>
       )}
-      
+
+      {renderDynamicParamInputs()}
+
       <Button onClick={handleSaveChanges} size="sm" variant="default" className="h-8 mt-3 w-full">
         <SaveIcon className="mr-1 h-3 w-3" /> Save Changes
       </Button>
     </div>
   );
+
 
   return (
     <TooltipProvider delayDuration={300}>
@@ -535,23 +499,25 @@ export function StepItem({ step, isSelected, initialExpanded = false, onSelect, 
                 <CurrentStepIcon className="h-5 w-5 text-primary flex-shrink-0" />
               </TooltipTrigger>
               <TooltipContent>
-                <p>Type: {editableStep.type}</p>
+                <p>Type: {editableStep.type} {editableStep.commandKey ? `(Cmd: ${editableStep.commandKey})` : ''}</p>
               </TooltipContent>
             </Tooltip>
-            {editableStep.type !== 'undetermined' && <Badge variant="outline" className="text-xs capitalize h-6 px-2 py-1">{editableStep.type}</Badge> }
-            
-            <div 
-                className="flex-grow truncate min-w-0" 
-                onClick={editableStep.type !== 'undetermined' ? toggleExpand : undefined} 
-                role={editableStep.type !== 'undetermined' ? "button" : undefined} 
-                tabIndex={editableStep.type !== 'undetermined' ? 0 : undefined} 
-                onKeyDown={(e) => editableStep.type !== 'undetermined' && e.key === 'Enter' && toggleExpand()} 
-                aria-expanded={isExpanded}
+            {editableStep.type !== 'undetermined' && <Badge variant="outline" className="text-xs capitalize h-6 px-2 py-1">{editableStep.type}</Badge>}
+
+            <div
+              className="flex-grow truncate min-w-0"
+              onClick={editableStep.type !== 'undetermined' ? toggleExpand : undefined}
+              role={editableStep.type !== 'undetermined' ? "button" : undefined}
+              tabIndex={editableStep.type !== 'undetermined' ? 0 : undefined}
+              onKeyDown={(e) => editableStep.type !== 'undetermined' && e.key === 'Enter' && toggleExpand()}
+              aria-expanded={isExpanded}
             >
-              <p className="text-sm font-medium truncate" title={editableStep.description || "New Step - Choose Command"}>{editableStep.description || (editableStep.type === 'undetermined' ? "New Step - Choose Command" : "Step")}</p>
+              <p className="text-sm font-medium truncate" title={editableStep.description || "New Step - Choose Command"}>
+                {editableStep.description || (editableStep.type === 'undetermined' ? "New Step - Choose Command" : "Step")}
+              </p>
               {!isExpanded && editableStep.type !== 'undetermined' && renderStepDetailsSummary()}
             </div>
-            
+
             {editableStep.type !== 'undetermined' && (
               <Button variant="ghost" size="icon" onClick={toggleExpand} className="h-8 w-8 flex-shrink-0" aria-label={isExpanded ? "Collapse details" : "Expand details"}>
                 {isExpanded ? <ChevronUpIcon className="h-4 w-4" /> : <ChevronDownIcon className="h-4 w-4" />}
@@ -560,20 +526,20 @@ export function StepItem({ step, isSelected, initialExpanded = false, onSelect, 
 
             <DropdownMenu onOpenChange={(open) => { if (open && isExpanded && editableStep.type !== 'undetermined') setIsExpanded(false); }}>
               <DropdownMenuTrigger asChild>
-                <Button 
-                  variant="ghost" 
-                  size="icon" 
-                  className="h-8 w-8 flex-shrink-0" 
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 flex-shrink-0"
                   aria-label="More options"
                   onClick={(e) => e.stopPropagation()}
-                  onFocus={(e) => e.stopPropagation()} 
+                  onFocus={(e) => e.stopPropagation()}
                 >
                   <MoreOptionsIcon className="h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent 
+              <DropdownMenuContent
                 align="end"
-                onCloseAutoFocus={(e) => e.preventDefault()} 
+                onCloseAutoFocus={(e) => e.preventDefault()}
               >
                 <DropdownMenuItem onSelect={handleDelete} className="text-destructive focus:text-destructive focus:bg-destructive/10">
                   <DeleteIcon className="mr-2 h-4 w-4" />
@@ -590,4 +556,3 @@ export function StepItem({ step, isSelected, initialExpanded = false, onSelect, 
   );
 }
 
-    
