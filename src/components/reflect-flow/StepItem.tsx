@@ -3,7 +3,7 @@
 
 import type React from 'react';
 import { useState, useEffect, useMemo, useRef } from 'react';
-import type { Step, StepType, NavigateStep, ClickStep, TypeStep, ScrollStep, WaitForElementStep, KeyDownStep, KeyUpStep, DoubleClickStep, MoveToStep, DragAndDropStep, ExecuteScriptStep, IsEqualStep, SaveScreenshotStep, SelectOptionStep, TouchActionStep, WaitUntilStep, PauseStep, DebugStep } from '@/types';
+import type { Step, StepType } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -50,9 +50,7 @@ import {
 
 interface StepItemProps {
   step: Step;
-  isSelected: boolean;
   initialExpanded?: boolean;
-  onSelect: (id: string, selected: boolean) => void;
   onUpdateStep: (step: Step) => void;
   onDeleteStep: (id:string) => void;
   onCommandSelected: (stepId: string) => void;
@@ -62,18 +60,16 @@ const getIconForStep = (type: StepType, commandKey?: string): React.ElementType 
   if (commandKey) {
     const cmd = findCommandByKey(commandKey);
     if (cmd) {
-        // More specific icon mapping based on commandKey if needed
         switch(cmd.key) {
             case 'navigate': return NavigateIcon;
             case 'click': return ClickIcon;
-            case 'doubleClick': return ClickIcon; // Or a specific DoubleClickIcon
+            case 'doubleClick': return ClickIcon;
             case 'setValue': case 'addValue': case 'clearValue': return TypeActionIcon;
-            // Add more specific commandKey to icon mappings here if 'type' is too generic
+            case 'saveScreenshot': return SaveScreenshotIcon;
         }
     }
   }
 
-  // Fallback to type-based icons
   switch (type) {
     case 'navigate': return NavigateIcon;
     case 'click': return ClickIcon;
@@ -124,7 +120,7 @@ const parseParamDefinition = (def: string, isOptional: boolean): ParamDefinition
 };
 
 
-export function StepItem({ step, isSelected, initialExpanded = false, onSelect, onUpdateStep, onDeleteStep, onCommandSelected }: StepItemProps) {
+export function StepItem({ step, initialExpanded = false, onUpdateStep, onDeleteStep, onCommandSelected }: StepItemProps) {
   const [editableStep, setEditableStep] = useState<Step>(() => JSON.parse(JSON.stringify(step)));
   const [isExpanded, setIsExpanded] = useState(initialExpanded || step.type === 'undetermined');
   const [commandSearch, setCommandSearch] = useState('');
@@ -148,9 +144,6 @@ export function StepItem({ step, isSelected, initialExpanded = false, onSelect, 
     setEditableStep(newEditableStep);
     if (newEditableStep.type === 'undetermined') {
         setCommandSearch('');
-         if (initialExpanded) {
-            // setTimeout(() => popoverTriggerRef.current?.click(), 0);
-         }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step, initialExpanded]);
@@ -201,12 +194,12 @@ export function StepItem({ step, isSelected, initialExpanded = false, onSelect, 
     });
     
     
-    if (selectedCmd.key === 'getAttribute' && (newStepData as WaitForElementStep).attributeName) {
-       (newStepData as WaitForElementStep).property = `attribute:${(newStepData as WaitForElementStep).attributeName}`;
-    } else if (selectedCmd.key === 'getCSSProperty' && (newStepData as WaitForElementStep).cssProperty) {
-       (newStepData as WaitForElementStep).property = `css:${(newStepData as WaitForElementStep).cssProperty}`;
-    } else if (selectedCmd.key === 'getProperty' && (newStepData as WaitForElementStep).jsPropertyName) {
-       (newStepData as WaitForElementStep).property = `jsProperty:${(newStepData as WaitForElementStep).jsPropertyName}`;
+    if (selectedCmd.key === 'getAttribute' && (newStepData as any).attributeName) {
+       (newStepData as any).property = `attribute:${(newStepData as any).attributeName}`;
+    } else if (selectedCmd.key === 'getCSSProperty' && (newStepData as any).cssProperty) {
+       (newStepData as any).property = `css:${(newStepData as any).cssProperty}`;
+    } else if (selectedCmd.key === 'getProperty' && (newStepData as any).jsPropertyName) {
+       (newStepData as any).property = `jsProperty:${(newStepData as any).jsPropertyName}`;
     }
 
 
@@ -282,12 +275,12 @@ export function StepItem({ step, isSelected, initialExpanded = false, onSelect, 
     }
 
     
-    if (finalStep.commandKey === 'getAttribute' && (finalStep as WaitForElementStep).attributeName && !(finalStep as WaitForElementStep).property?.startsWith('attribute:')) {
-       (finalStep as WaitForElementStep).property = `attribute:${(finalStep as WaitForElementStep).attributeName}`;
-    } else if (finalStep.commandKey === 'getCSSProperty' && (finalStep as WaitForElementStep).cssProperty && !(finalStep as WaitForElementStep).property?.startsWith('css:')) {
-       (finalStep as WaitForElementStep).property = `css:${(finalStep as WaitForElementStep).cssProperty}`;
-    } else if (finalStep.commandKey === 'getProperty' && (finalStep as WaitForElementStep).jsPropertyName && !(finalStep as WaitForElementStep).property?.startsWith('jsProperty:')) {
-       (finalStep as WaitForElementStep).property = `jsProperty:${(finalStep as WaitForElementStep).jsPropertyName}`;
+    if (finalStep.commandKey === 'getAttribute' && (finalStep as any).attributeName && !(finalStep as any).property?.startsWith('attribute:')) {
+       (finalStep as any).property = `attribute:${(finalStep as any).attributeName}`;
+    } else if (finalStep.commandKey === 'getCSSProperty' && (finalStep as any).cssProperty && !(finalStep as any).property?.startsWith('css:')) {
+       (finalStep as any).property = `css:${(finalStep as any).cssProperty}`;
+    } else if (finalStep.commandKey === 'getProperty' && (finalStep as any).jsPropertyName && !(finalStep as any).property?.startsWith('jsProperty:')) {
+       (finalStep as any).property = `jsProperty:${(finalStep as any).jsPropertyName}`;
     }
 
     onUpdateStep(finalStep);
@@ -310,7 +303,7 @@ export function StepItem({ step, isSelected, initialExpanded = false, onSelect, 
 
     if (s.type === 'navigate' && 'url' in s) summaryText = `Navigate to: ${s.url || '...'}`;
     else if (s.type === 'type' && 'value' in s) summaryText = `Type: "${s.value || '...'}" into ${primarySelectorDisplay || 'element'}`;
-    else if (s.type === 'scroll' && 'scrollType' in s && s.scrollType === 'window') summaryText = `Scroll window to X:${s.x ?? 0}, Y:${s.y ?? 0}`;
+    else if (s.type === 'scroll' && 'scrollType' in s && s.scrollType === 'window') summaryText = `Scroll window to X:${(s as any).x ?? 0}, Y:${(s as any).y ?? 0}`;
     else if (primarySelectorDisplay && (s.description || s.badgeLabel)) summaryText = `${s.description || s.badgeLabel} on ${primarySelectorDisplay}`;
     else if (s.description || s.badgeLabel) summaryText = s.description || s.badgeLabel;
 
@@ -344,7 +337,6 @@ export function StepItem({ step, isSelected, initialExpanded = false, onSelect, 
           }}
           onCloseAutoFocus={(e) => {
              e.preventDefault();
-             // popoverTriggerRef.current?.focus(); // Keep focus on trigger
           }} 
         >
           <Input
@@ -525,17 +517,10 @@ export function StepItem({ step, isSelected, initialExpanded = false, onSelect, 
 
   return (
     <TooltipProvider delayDuration={300}>
-      <Card className={`mb-2 transition-all duration-150 ease-in-out ${isSelected ? 'shadow-lg border-primary bg-primary/5' : 'shadow-sm'}`}>
+      <Card className="mb-2 shadow-sm transition-all duration-150 ease-in-out">
         <CardContent className="p-3">
           <div className="flex items-center space-x-3">
             <DragHandleIcon className="h-5 w-5 text-muted-foreground cursor-grab flex-shrink-0" />
-            <Checkbox
-              id={`step-${editableStep.id}`}
-              checked={isSelected}
-              onCheckedChange={(checked) => onSelect(editableStep.id, !!checked)}
-              aria-label={`Select step ${editableStep.description}`}
-              className="flex-shrink-0"
-            />
             <Tooltip>
               <TooltipTrigger asChild>
                 <CurrentStepIcon className="h-5 w-5 text-primary flex-shrink-0" />
@@ -602,3 +587,4 @@ export function StepItem({ step, isSelected, initialExpanded = false, onSelect, 
     </TooltipProvider>
   );
 }
+

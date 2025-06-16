@@ -7,15 +7,13 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 
 interface StepListProps {
   steps: Step[];
-  selectedSteps: string[];
-  onSelectStep: (id: string, selected: boolean) => void;
   onUpdateStep: (step: Step) => void;
   onDeleteStep: (id: string) => void;
   newlyAddedStepId: string | null;
   onStepDetermined: (id: string) => void;
 }
 
-export function StepList({ steps, selectedSteps, onSelectStep, onUpdateStep, onDeleteStep, newlyAddedStepId, onStepDetermined }: StepListProps) {
+export function StepList({ steps, onUpdateStep, onDeleteStep, newlyAddedStepId, onStepDetermined }: StepListProps) {
   if (steps.length === 0) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground p-8 min-h-0">
@@ -39,8 +37,6 @@ export function StepList({ steps, selectedSteps, onSelectStep, onUpdateStep, onD
           <StepItem
             key={step.id}
             step={step}
-            isSelected={selectedSteps.includes(step.id)}
-            onSelect={onSelectStep}
             onUpdateStep={onUpdateStep}
             onDeleteStep={onDeleteStep}
             initialExpanded={step.id === newlyAddedStepId || step.type === 'undetermined'}
@@ -53,3 +49,4 @@ export function StepList({ steps, selectedSteps, onSelectStep, onUpdateStep, onD
 }
 
     
+

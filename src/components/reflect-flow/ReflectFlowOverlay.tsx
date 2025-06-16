@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useCallback, useEffect, useRef } from 'react';
-import type { Step, ClickStep, RecordingSession, UndeterminedStep, ElementInfoForPopup } from '@/types';
+import type { Step, RecordingSession, UndeterminedStep, ElementInfoForPopup } from '@/types';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { HeaderControls } from './HeaderControls';
@@ -10,7 +10,7 @@ import { StepList } from './StepList';
 import { ElementHoverPopup } from './ElementHoverPopup';
 import { HighlightOverlay } from './HighlightOverlay';
 import { useToast } from '@/hooks/use-toast';
-import { PlayIcon, CheckboxSquareIcon, CheckboxUncheckedIcon, FileIcon, TargetIcon, AddIcon, ClickIcon as ClickActionIcon } from './icons'; 
+import { FileIcon, TargetIcon, AddIcon } from './icons';
 import { CommandInfo, findCommandByKey } from '@/lib/commands';
 
 
@@ -70,7 +70,6 @@ const generateElementInfo = (element: HTMLElement): ElementInfoForPopup => {
 export function ReflectFlowOverlay() {
   const [isRecording, setIsRecording] = useState(false);
   const [recordedSteps, setRecordedSteps] = useState<Step[]>([]);
-  const [selectedSteps, setSelectedSteps] = useState<string[]>([]);
   const [isElementSelectorActive, setIsElementSelectorActive] = useState(false);
 
   const [highlightedElementDetails, setHighlightedElementDetails] = useState<ElementDetails | null>(null);
@@ -208,12 +207,12 @@ export function ReflectFlowOverlay() {
     if (selectors.length === 0) selectors.push(elementInfo.tagName || 'unknown');
 
     const primarySelector = selectors[0] || 'N/A';
-    const commandInfo = findCommandByKey('click')!; // click command is guaranteed to exist
+    const commandInfo = findCommandByKey('click')!;
 
-    const newStep: ClickStep = {
+    const newStep: Step = {
       id: String(Date.now()) + Math.random().toString(36).substring(2,7),
-      type: 'click',
-      commandKey: 'click',
+      type: commandInfo.mapsToStepType,
+      commandKey: commandInfo.key,
       badgeLabel: commandInfo.badgeLabel,
       description: commandInfo.description,
       selectors: selectors,
@@ -341,16 +340,6 @@ export function ReflectFlowOverlay() {
       if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
     };
   }, [isElementSelectorActive, isElementContextMenuOpen, handleMouseOver, handleMouseOut, toast, closeElementContextMenu]);
-
-
-  const handlePlaySelected = useCallback(() => {
-    if (selectedSteps.length === 0) {
-      toast({ title: "No steps selected", description: "Please select steps to play.", variant: "destructive" });
-      return;
-    }
-    toast({ title: "Playing Selected Steps (Simulated)", description: `Actual playback logic for ${selectedSteps.length} step(s) not yet implemented.` });
-    console.log("Simulating playback of steps:", selectedSteps.map(id => recordedSteps.find(s => s.id === id)));
-  }, [selectedSteps, recordedSteps, toast]);
 
   const handleToggleElementSelector = useCallback(() => {
     const newIsActive = !isElementSelectorActive;
@@ -484,20 +473,6 @@ export function ReflectFlowOverlay() {
     }
   }, [toast, recordedSteps]);
 
-  const handleSelectStep = useCallback((id: string, selected: boolean) => {
-    setSelectedSteps(prev =>
-      selected ? [...prev, id] : prev.filter(stepId => stepId !== id)
-    );
-  }, []);
-
-  const handleSelectAllSteps = useCallback(() => {
-    if (selectedSteps.length === recordedSteps.length && recordedSteps.length > 0) {
-      setSelectedSteps([]);
-    } else {
-      setSelectedSteps(recordedSteps.map(step => step.id));
-    }
-  }, [recordedSteps, selectedSteps]);
-
   const handleUpdateStep = useCallback((updatedStep: Step) => {
     setRecordedSteps(prev => prev.map(s => s.id === updatedStep.id ? updatedStep : s));
     if (updatedStep.type !== 'undetermined') {
@@ -511,7 +486,6 @@ export function ReflectFlowOverlay() {
 
   const handleDeleteStep = useCallback((id: string) => {
     setRecordedSteps(prev => prev.filter(s => s.id !== id));
-    setSelectedSteps(prev => prev.filter(stepId => stepId !== id));
     toast({ title: "Step Deleted", description: "The step has been removed." });
   }, [toast]);
 
@@ -568,8 +542,6 @@ export function ReflectFlowOverlay() {
             <CardContent className="flex-1 min-h-0 overflow-hidden p-0 relative">
               <StepList
                 steps={recordedSteps}
-                selectedSteps={selectedSteps}
-                onSelectStep={handleSelectStep}
                 onUpdateStep={handleUpdateStep}
                 onDeleteStep={handleDeleteStep}
                 newlyAddedStepId={newlyAddedStepId}
@@ -577,23 +549,10 @@ export function ReflectFlowOverlay() {
               />
             </CardContent>
             <CardFooter className="p-3 border-t flex flex-col items-start space-y-2">
-                <div className="flex justify-between w-full items-center">
+                <div className="flex justify-start w-full items-center">
                   <Button onClick={handleAddManualStep} variant="outline" size="sm">
                     <AddIcon className="mr-2 h-4 w-4" /> Add Step
                   </Button>
-
-                  {recordedSteps.length > 0 && (
-                    <div className="flex items-center space-x-2">
-                        <Button onClick={handleSelectAllSteps} variant="ghost" size="sm" className="text-xs">
-                        {selectedSteps.length === recordedSteps.length ? <CheckboxSquareIcon className="mr-2 h-4 w-4" /> : <CheckboxUncheckedIcon className="mr-2 h-4 w-4" />}
-                        {selectedSteps.length === recordedSteps.length ? 'Deselect All' : 'Select All'} ({selectedSteps.length}/{recordedSteps.length})
-                        </Button>
-                        <Button onClick={handlePlaySelected} variant="default" size="sm" disabled={selectedSteps.length === 0 || isRecording} className="bg-accent hover:bg-accent/90 text-accent-foreground">
-                        <PlayIcon className="mr-2 h-4 w-4" />
-                        Play Selected ({selectedSteps.length})
-                        </Button>
-                    </div>
-                  )}
                 </div>
               </CardFooter>
           </>
@@ -642,3 +601,4 @@ export function ReflectFlowOverlay() {
     
 
     
+
