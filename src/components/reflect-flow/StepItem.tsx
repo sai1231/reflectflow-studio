@@ -1,3 +1,4 @@
+
 "use client";
 
 import type React from 'react';
@@ -54,7 +55,7 @@ const getIconForStep = (type: Step['type']): React.ElementType => {
   switch (type) {
     case 'navigate': return NavigateIcon;
     case 'click': return ClickIcon;
-    case 'doubleClick': return ClickIcon; 
+    case 'doubleClick': return DoubleClickIcon; // Make sure DoubleClickIcon is defined
     case 'type': return TypeActionIcon;
     case 'keyDown': return KeyboardIcon;
     case 'keyUp': return KeyboardIcon;
@@ -71,41 +72,24 @@ export function StepItem({ step, isSelected, initialExpanded = false, onSelect, 
   const [editableStep, setEditableStep] = useState<Step>(() => JSON.parse(JSON.stringify(step)));
   const [isExpanded, setIsExpanded] = useState(initialExpanded || step.type === 'undetermined');
   const [commandSearch, setCommandSearch] = useState('');
-  const [isCommandPopoverOpen, setIsCommandPopoverOpen] = useState(step.type === 'undetermined' && (initialExpanded || step.type === 'undetermined'));
+  const [isCommandPopoverOpen, setIsCommandPopoverOpen] = useState(false); // Controlled by Popover
   
-  const commandInputRef = useRef<HTMLInputElement>(null);
+  const commandInputRef = useRef<HTMLInputElement>(null); // For input inside popover
 
   useEffect(() => {
     const newEditableStep = JSON.parse(JSON.stringify(step));
-    // Check if the fundamental step ID or type has changed, indicating a new step prop
     if (editableStep.id !== newEditableStep.id || (editableStep.type === 'undetermined' && newEditableStep.type !== 'undetermined')) {
         setIsExpanded(initialExpanded || newEditableStep.type === 'undetermined');
         setEditableStep(newEditableStep);
         setCommandSearch('');
-        const shouldPopoverBeOpen = newEditableStep.type === 'undetermined' && (initialExpanded || newEditableStep.id === step.id ); // Keep open if it's the same undetermined step
-        setIsCommandPopoverOpen(shouldPopoverBeOpen);
-        if (shouldPopoverBeOpen && commandInputRef.current) {
-            commandInputRef.current.focus();
-        }
+         // Don't auto-open popover here, user clicks button now
     } else if (editableStep.id === newEditableStep.id && editableStep.type !== 'undetermined' && newEditableStep.type === 'undetermined') {
-        // This case handles if a determined step somehow becomes undetermined (e.g. error state, though unlikely with current flow)
         setEditableStep(newEditableStep);
         setIsExpanded(true);
-        setIsCommandPopoverOpen(true);
-        if (commandInputRef.current) {
-            commandInputRef.current.focus();
-        }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step, initialExpanded]); 
 
-  useEffect(() => {
-    if (editableStep.type === 'undetermined' && isExpanded && commandInputRef.current) {
-        setIsCommandPopoverOpen(true); // Ensure popover is set to open
-        commandInputRef.current.focus();
-    }
-  }, [editableStep.type, isExpanded]);
-  
   const CurrentStepIcon = getIconForStep(editableStep.type);
 
   const filteredCommands = useMemo(() => {
@@ -143,7 +127,11 @@ export function StepItem({ step, isSelected, initialExpanded = false, onSelect, 
         case 'keyUp': finalType = 'keyUp'; newStepData = { ...newStepData, key: 'Enter' } as Partial<KeyUpStep>; break;
         case 'scrollIntoView':
             finalType = 'scroll';
-            newStepData = { ...newStepData, selectors: [''], selector: '' } as Partial<ScrollStep>;
+            newStepData = { ...newStepData, selectors: [''] } as Partial<ScrollStep>;
+            if (editableStep.selectors && editableStep.selectors[0] && editableStep.selectors[0].toLowerCase() === 'document') {
+              (newStepData as Partial<ScrollStep>).x = 0;
+              (newStepData as Partial<ScrollStep>).y = 0;
+            }
             break;
         case 'moveTo': finalType = 'moveTo'; break;
         
@@ -183,12 +171,15 @@ export function StepItem({ step, isSelected, initialExpanded = false, onSelect, 
         case 'getSize': newStepData = {...newStepData, property:'size.width', operator:'>', expectedValue:0}; finalType = 'waitForElement'; break;
         case 'getLocation': newStepData = {...newStepData, property:'location.x', operator:'>=', expectedValue:0}; finalType = 'waitForElement'; break;
         
-        default: // For commands not directly mapped to a specific complex type
+        default: 
              if (selectedCmd.key.toLowerCase().includes('get') || selectedCmd.key.toLowerCase().includes('is') || selectedCmd.key.toLowerCase().includes('wait')) {
                 finalType = 'waitForElement'; 
                 newStepData = { ...newStepData, property: 'visible', operator: '==', expectedValue: true };
-            } else {
-                finalType = 'click'; // Default if no other type matches
+            } else if (Object.values(StepType).includes(selectedCmd.key as StepType)) {
+                finalType = selectedCmd.key as StepType;
+            }
+            else {
+                finalType = 'click';
             }
             break;
     }
@@ -197,16 +188,16 @@ export function StepItem({ step, isSelected, initialExpanded = false, onSelect, 
     const baseSelector = editableStep.selector || baseSelectors[0] || '';
 
     const fullyTypedStep = {
-      ...editableStep, // Keep existing ID, target, timeout etc.
-      ...newStepData,  // Apply new description and type-specific defaults
+      ...editableStep,
+      ...newStepData,
       type: finalType,
       selectors: baseSelectors,
       selector: baseSelector,
     } as Step;
 
-    setEditableStep(fullyTypedStep); // Update local state immediately for UI responsiveness
-    onUpdateStep(fullyTypedStep);   // Propagate to parent to update main list
-    setIsCommandPopoverOpen(false);
+    setEditableStep(fullyTypedStep); 
+    onUpdateStep(fullyTypedStep);   
+    setIsCommandPopoverOpen(false); // Close popover on selection
     setCommandSearch('');
     if (fullyTypedStep.type !== 'undetermined') {
       onCommandSelected(fullyTypedStep.id); 
@@ -255,13 +246,11 @@ export function StepItem({ step, isSelected, initialExpanded = false, onSelect, 
 
   const handleSaveChanges = () => {
     let finalStep = { ...editableStep };
-    // Ensure selector is consistent with selectors array
     if (finalStep.selectors && finalStep.selectors.length > 0) {
       finalStep.selector = finalStep.selectors[0];
     } else if (finalStep.selector && (!finalStep.selectors || finalStep.selectors.length === 0)) {
       finalStep.selectors = [finalStep.selector];
     } else if (!finalStep.selector && (!finalStep.selectors || finalStep.selectors.length === 0)) {
-      // For types that require a selector, ensure there's at least an empty one
       const typesRequiringSelector = ['click', 'type', 'waitForElement', 'doubleClick', 'moveTo', 'scroll'];
       const isDocumentScroll = finalStep.type === 'scroll' && (finalStep as ScrollStep).selectors?.[0]?.toLowerCase() === 'document';
       
@@ -278,9 +267,6 @@ export function StepItem({ step, isSelected, initialExpanded = false, onSelect, 
   };
 
   const toggleExpand = () => {
-    if (editableStep.type === 'undetermined' && !isExpanded) {
-        setIsCommandPopoverOpen(true); 
-    }
     setIsExpanded(prev => !prev);
   };
   
@@ -288,7 +274,7 @@ export function StepItem({ step, isSelected, initialExpanded = false, onSelect, 
     const s = editableStep;
     if (s.type === 'undetermined') return <p className="text-xs text-muted-foreground truncate">Choose a command to define this step.</p>;
     
-    const primarySelectorDisplay = s.selector || (s.selectors && s.selectors[0]) || (s.type !== 'navigate' && s.type !== 'scroll' ? 'N/A' : '');
+    const primarySelectorDisplay = s.selector || (s.selectors && s.selectors[0]) || (s.type !== 'navigate' && s.type !== 'scroll' && s.type !== 'keyDown' && s.type !== 'keyUp' ? 'N/A' : '');
 
     switch (s.type) {
       case 'navigate': return <p className="text-xs text-muted-foreground truncate" title={(s as NavigateStep).url}>URL: {(s as NavigateStep).url}</p>;
@@ -312,36 +298,54 @@ export function StepItem({ step, isSelected, initialExpanded = false, onSelect, 
 
   const renderCommandSelector = () => (
     <div className="space-y-2 p-3 border-t mt-2 bg-muted/20 rounded-b-md">
-      <Label htmlFor={`cmd-search-${editableStep.id}`} className="text-sm font-medium">Choose Command</Label>
+      <Label htmlFor={`cmd-select-trigger-${editableStep.id}`} className="text-sm font-medium">Choose Command</Label>
       <Popover open={isCommandPopoverOpen} onOpenChange={setIsCommandPopoverOpen}>
         <PopoverTrigger asChild>
+            <Button
+                id={`cmd-select-trigger-${editableStep.id}`}
+                variant="outline"
+                role="combobox"
+                aria-expanded={isCommandPopoverOpen}
+                className="w-full justify-between text-sm h-10"
+            >
+                {editableStep.description || "Select command..."} 
+                <ChevronDownIcon className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+            </Button>
+        </PopoverTrigger>
+        <PopoverContent 
+            className="w-[calc(var(--radix-popover-trigger-width))] p-0 z-[10001]" // Ensure width matches trigger
+            align="start" // Align with the start of the trigger
+            onOpenAutoFocus={(e) => {
+                e.preventDefault();
+                commandInputRef.current?.focus();
+            }}
+            onCloseAutoFocus={(e) => e.preventDefault()}
+        >
             <Input
                 ref={commandInputRef}
-                id={`cmd-search-${editableStep.id}`}
-                data-command-input="true"
+                data-command-input="true" // For potential global event handling if needed
                 placeholder="Type to search commands..."
                 value={commandSearch}
                 onChange={(e) => setCommandSearch(e.target.value)}
-                onFocus={() => setIsCommandPopoverOpen(true)}
-                className="text-sm h-10"
+                className="text-sm h-10 border-x-0 border-t-0 rounded-none focus-visible:ring-0" // Minimal styling for input in popover
             />
-        </PopoverTrigger>
-        <PopoverContent 
-            className="w-[350px] p-0 z-[10001]" 
-            side="bottom" 
-            align="start"
-            onOpenAutoFocus={(e) => e.preventDefault()} // Prevent focus stealing
-            onCloseAutoFocus={(e) => e.preventDefault()} // Prevent focus shift on close
-        >
             <ScrollArea className="h-[200px]">
             {filteredCommands.length > 0 ? (
                 filteredCommands.map(cmd => (
                 <div
                     key={cmd.key}
-                    data-command-item="true"
+                    data-command-item="true" // For potential global event handling if needed
                     className="p-2 hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground cursor-pointer text-sm outline-none"
-                    onClick={() => handleCommandSelect(cmd)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleCommandSelect(cmd)}
+                    onClick={() => {
+                        handleCommandSelect(cmd);
+                        // setIsCommandPopoverOpen(false); // Popover's onOpenChange will handle this
+                    }}
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                            handleCommandSelect(cmd);
+                            // setIsCommandPopoverOpen(false);
+                        }
+                    }}
                     tabIndex={0} 
                 >
                     {cmd.description} <span className="text-xs text-muted-foreground">({cmd.key})</span>
@@ -370,9 +374,9 @@ export function StepItem({ step, isSelected, initialExpanded = false, onSelect, 
       </div>
       {(editableStep.type !== 'navigate' && editableStep.type !== 'keyDown' && editableStep.type !== 'keyUp' && !(editableStep.type === 'scroll' && (editableStep as ScrollStep).selectors?.[0]?.toLowerCase() === 'document')) && (
         <>
-          {(editableStep.selectors || ['']).map((sel, index) => ( // Ensure at least one selector input for relevant types
+          {(editableStep.selectors || ['']).map((sel, index) => (
             <div key={index} className="grid grid-cols-3 gap-2 items-center">
-              <Label htmlFor={`selector-${editableStep.id}-${index}`} className="text-xs">{index === 0 ? 'Selector(s)' : `Alt. Sel. ${index + 1}`}</Label>
+              <Label htmlFor={`selector-${editableStep.id}-${index}`} className="text-xs">{index === 0 ? 'Selector(s)' : `Alt. Sel. ${index}`}</Label>
               <div className="col-span-2 flex items-center gap-1">
                 <Input
                   id={`selector-${editableStep.id}-${index}`}
@@ -381,7 +385,7 @@ export function StepItem({ step, isSelected, initialExpanded = false, onSelect, 
                   onChange={(e) => handleSelectorChange(index, e.target.value)}
                   className="text-sm h-8 flex-grow"
                 />
-                {(editableStep.selectors || []).length > 1 && (
+                {(editableStep.selectors || []).length > 1 && index > 0 && (
                    <Button type="button" variant="ghost" size="icon" onClick={() => handleRemoveSelector(index)} className="h-7 w-7 p-0 flex-shrink-0" aria-label="Remove selector">
                     <DeleteIcon className="h-3 w-3" />
                   </Button>
@@ -516,7 +520,7 @@ export function StepItem({ step, isSelected, initialExpanded = false, onSelect, 
                 let val: string | number | boolean = valStr;
                 if (valStr.toLowerCase() === 'true') val = true;
                 else if (valStr.toLowerCase() === 'false') val = false;
-                else if (valStr === '' && (editableStep as WaitForElementStep).operator === 'exists') val = true; 
+                else if (valStr === '' && ((editableStep as WaitForElementStep).operator === 'exists' || (editableStep as WaitForElementStep).operator === 'stable' || (editableStep as WaitForElementStep).operator === 'clickable')) val = true; 
                 else if (valStr !== '' && !isNaN(parseFloat(valStr)) && isFinite(Number(valStr))) val = parseFloat(valStr);
                 handleInputChange('expectedValue', val);
               }}
@@ -580,7 +584,11 @@ export function StepItem({ step, isSelected, initialExpanded = false, onSelect, 
                   size="icon" 
                   className="h-8 w-8 flex-shrink-0" 
                   aria-label="More options"
-                  onClick={(e) => e.stopPropagation()} // Prevent card's toggleExpand if type is undetermined
+                  onClick={(e) => {
+                     e.stopPropagation(); // Prevents card's toggleExpand from firing
+                     // Add console log if needed: console.log('DropdownMenuTrigger clicked');
+                  }}
+                  onFocus={(e) => e.stopPropagation()} // Prevent focus events from bubbling
                 >
                   <MoreOptionsIcon className="h-4 w-4" />
                 </Button>
@@ -604,3 +612,4 @@ export function StepItem({ step, isSelected, initialExpanded = false, onSelect, 
   );
 }
 
+    
