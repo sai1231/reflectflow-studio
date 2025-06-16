@@ -637,7 +637,6 @@ export function ReflectFlowOverlay() {
 
       setRecordedSteps(prevSteps => prevSteps.map(s => {
         if (s.id === pickingSelectorForStepId) {
-          toast({ title: "Selectors Set", description: `Selectors for step "${s.badgeLabel || s.description}" updated.` });
           return {
             ...s,
             selectors: elementInfo.generatedSelectors,
@@ -646,6 +645,11 @@ export function ReflectFlowOverlay() {
         }
         return s;
       }));
+
+      if (stepToUpdate) {
+        toast({ title: "Selectors Set", description: `Selectors for step "${stepToUpdate.badgeLabel || stepToUpdate.description}" updated.` });
+      }
+      
       setPickingSelectorForStepId(null);
       setHighlightedElementDetails(null); 
     };
@@ -960,3 +964,4 @@ export function ReflectFlowOverlay() {
     </div>
   );
 }
+
