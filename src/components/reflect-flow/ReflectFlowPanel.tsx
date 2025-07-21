@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useCallback, useEffect } from 'react';
-import type { Step, UndeterminedStep, RecordingSession } from '@/types';
+import type { Step, UndeterminedStep, RecordingSession, ChromeMessage } from '@/types';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { HeaderControls } from './HeaderControls';
@@ -10,12 +10,7 @@ import { StepList } from './StepList';
 import { useToast } from '@/hooks/use-toast';
 import { FileIcon, AddIcon } from './icons';
 import { arrayMove } from '@dnd-kit/sortable';
-
-// Note: This component has been refactored to be a static panel.
-// The logic for recording events (click, focus, etc.) has been removed
-// as it will need to be implemented in a browser extension's "content script"
-// which communicates with this popup UI. This component now focuses purely on
-// displaying the state and allowing UI interaction within the panel itself.
+import { findCommandByKey } from '@/lib/commands';
 
 export function ReflectFlowPanel() {
   const [isRecording, setIsRecording] = useState(false);
@@ -27,21 +22,64 @@ export function ReflectFlowPanel() {
 
   const { toast } = useToast();
 
+  // Effect to listen for messages from the background script (e.g., new steps)
+  useEffect(() => {
+    const messageListener = (message: ChromeMessage, sender: chrome.runtime.MessageSender) => {
+      if (message.type === 'ADD_STEP' && message.payload) {
+        
+        const command = findCommandByKey(message.payload.commandKey);
+        if (!command) return;
+
+        const newStep: Step = {
+            id: message.payload.id || `${Date.now()}`,
+            type: command.mapsToStepType,
+            commandKey: command.key,
+            badgeLabel: command.badgeLabel,
+            description: command.description,
+            selectors: message.payload.selectors,
+            selector: message.payload.selector,
+            target: 'main',
+            timeout: 5000,
+            ...command.defaultParams,
+            ...message.payload, // Include any other properties like value, url etc.
+        };
+
+        setRecordedSteps(prev => [...prev, newStep]);
+        setNewlyAddedStepId(newStep.id);
+      }
+    };
+
+    chrome.runtime.onMessage.addListener(messageListener);
+
+    return () => {
+      chrome.runtime.onMessage.removeListener(messageListener);
+    };
+  }, []);
+
+
+  const sendMessageToContentScript = (message: ChromeMessage) => {
+    // In an extension, you'd send a message to the content script.
+    // We'll use the background script as a relay.
+    chrome.runtime.sendMessage(message);
+  };
+
   const handleToggleRecording = useCallback(() => {
-    setIsRecording(prev => !prev);
-    // In a real extension, this would send a message to the content script
-    // to start or stop listening to page events.
+    const newIsRecording = !isRecording;
+    setIsRecording(newIsRecording);
+    sendMessageToContentScript({ type: 'TOGGLE_RECORDING', payload: { isRecording: newIsRecording } });
     toast({
-      title: isRecording ? "Recording Paused" : "Recording Started",
-      description: isRecording ? "Interaction recording is now paused." : "Capturing interactions. Perform actions on the page.",
+      title: newIsRecording ? "Recording Started" : "Recording Paused",
+      description: newIsRecording ? "Capturing interactions on the page." : "Interaction recording is now paused.",
     });
   }, [isRecording, toast]);
 
   const handleToggleElementSelector = useCallback(() => {
-    setIsElementSelectorActive(prev => !prev);
-     toast({
-        title: isElementSelectorActive ? "Element Selector Deactivated" : "Element Selector Activated",
-        description: isElementSelectorActive ? "Element inspection is off." : "Hover over elements to inspect.",
+    const newIsActive = !isElementSelectorActive;
+    setIsElementSelectorActive(newIsActive);
+    sendMessageToContentScript({ type: 'TOGGLE_ELEMENT_SELECTOR', payload: { isActive: newIsActive } });
+    toast({
+        title: newIsActive ? "Element Selector Activated" : "Element Selector Deactivated",
+        description: newIsActive ? "Hover over elements to inspect." : "Element inspection is off.",
       });
   }, [isElementSelectorActive, toast]);
 
@@ -71,24 +109,25 @@ export function ReflectFlowPanel() {
     const sessionToSave: RecordingSession = {
       title: "My Recorded Session " + new Date().toLocaleTimeString(),
       description: "A recording of user interactions.",
-      url: "N/A (Extension Context)", // URL would come from content script
+      url: "N/A (Extension Context)",
       steps: recordedSteps,
       device_screen_emulation: {
-        width: 0, // These would be fetched from the target page
+        width: 0, 
         height: 0,
         deviceScaleFactor: window.devicePixelRatio,
         mobile: /Mobi|Android/i.test(navigator.userAgent),
         userAgent: navigator.userAgent,
       }
     };
-    console.log("Saving session:", JSON.stringify(sessionToSave, null, 2));
+    
     try {
-      // In a real extension, this would use chrome.storage.local.set
-      localStorage.setItem('reflectFlowSession', JSON.stringify(sessionToSave));
-      toast({ title: "Session Saved", description: "Session data saved to Local Storage and console." });
+      // Use chrome.storage.local for extensions
+      chrome.storage.local.set({ 'reflectFlowSession': JSON.stringify(sessionToSave) }, () => {
+         toast({ title: "Session Saved", description: "Session data saved to extension storage." });
+      });
     } catch (error) {
-      console.error("Error saving session to localStorage:", error);
-      toast({ title: "Save Error", "description": "Could not save session to Local Storage. See console.", variant: "destructive" });
+      console.error("Error saving session to chrome.storage:", error);
+      toast({ title: "Save Error", "description": "Could not save session. See console.", variant: "destructive" });
     }
   }, [recordedSteps, toast]);
 
@@ -149,8 +188,6 @@ export function ReflectFlowPanel() {
   }, [toast]);
 
   const handleInitiateSelectorPick = useCallback((stepId: string) => {
-    // In a real extension, this would send a message to the content script
-    // to enter "picking mode".
     toast({ title: "Pick an Element", description: "This would activate picking mode on the page." });
   }, [toast]);
 

@@ -1,4 +1,5 @@
 
+
 export type StepType =
   | 'navigate'
   | 'click'
@@ -199,4 +200,9 @@ export interface RecordingSession {
   };
 }
 
+// Types for communication between content script and popup/background
+export interface ChromeMessage {
+    type: 'TOGGLE_RECORDING' | 'ADD_STEP' | 'TOGGLE_ELEMENT_SELECTOR';
+    payload?: any;
+}
     
