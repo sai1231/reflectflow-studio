@@ -23,11 +23,10 @@ import {
   ClipboardCheck,
   AlertTriangle,
   CircleDot,
-  // Target, // TargetIcon is being replaced by InspectIcon
-  Inspect, // New Icon for element selection
+  Inspect,
   ChevronRight,
   Watch,
-  CheckCircle2 as LucideCheckCircle2Import, // Aliased to avoid conflict
+  CheckCircle2 as LucideCheckCircle2Import,
   PlayCircle,
   X,
   PlusSquare,
@@ -58,6 +57,7 @@ import {
   PauseCircle,
   Bug,
   Download as LucideDownload,
+  Move as MoveIcon,
 } from 'lucide-react';
 
 export const RecordIcon = CircleDot;
@@ -83,12 +83,12 @@ export const FileIcon = FileText;
 export const CopyIcon = Copy;
 export const PasteIcon = ClipboardCheck;
 export const WarningIcon = AlertTriangle;
-// export const TargetIcon = Target; // Replaced by InspectIcon
-export const InspectIcon = Inspect; // New icon for element selection
+export const InspectIcon = Inspect;
 export const SubMenuArrowIcon = ChevronRight;
 export const WaitIcon = Watch;
 export const AssertionIcon = LucideListChecks;
 export const ActionIcon = PlayCircle;
+export const MoveIcon = Move;
 
 export const XIcon = X;
 

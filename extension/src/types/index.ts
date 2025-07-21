@@ -44,58 +44,46 @@ export interface ClickStep extends BaseStep {
 
 export interface DoubleClickStep extends BaseStep {
   type: 'doubleClick';
-  // WDIO doubleClick doesn't take specific options other than what ClickOptions might cover (button)
-  // For simplicity, we can reuse clickOptions if needed, or leave it without specific options.
   clickOptions?: string;
 }
 
 export interface TypeStep extends BaseStep {
   type: 'type';
-  value: string; // Text to type or value for addValue/setValue. For clearValue, this would be empty.
+  value: string;
 }
 
 export interface KeyDownStep extends BaseStep {
   type: 'keyDown';
-  key: string; // Key to press, e.g., 'Enter', 'Shift', 'a'
+  key: string;
 }
 
 export interface KeyUpStep extends BaseStep {
   type: 'keyUp';
-  key: string; // Key to release
+  key: string;
 }
 
 export interface ScrollStep extends BaseStep {
   type: 'scroll';
-  scrollType?: 'window' | 'element'; // To distinguish 'scrollWindow' from 'scrollIntoView'
-  x?: number; // For window scroll (command: scrollWindow)
-  y?: number; // For window scroll (command: scrollWindow)
-  scrollIntoViewOptions?: string; // JSON string for element scroll options (command: scrollIntoView)
+  scrollType?: 'window' | 'element';
+  x?: number;
+  y?: number;
+  scrollIntoViewOptions?: string;
 }
 
-// Consolidating various "get", "is", and "wait" commands into WaitForElementStep
-// The 'property' field combined with 'operator' and 'expectedValue' defines the assertion/wait.
 export interface WaitForElementStep extends BaseStep {
   type: 'waitForElement';
-  // For 'getAttribute', 'getCSSProperty', 'getProperty', 'getHTML', 'getText', 'getValue', 'getTagName', 'getLocation', 'getSize', 'getComputedLabel', 'getComputedRole'
-  // For 'isClickable', 'isDisplayed', 'isEnabled', 'isExisting', 'isFocused', 'isSelected', 'isStable'
-  // For 'waitForClickable', 'waitForDisplayed', 'waitForEnabled', 'waitForExist', 'waitForStable'
-  // For 'getElement', 'getElements'
-  // For 'nextElement', 'parentElement', 'previousElement'
-  property?: string; // e.g., 'visible', 'textContent', 'attribute:data-foo', 'css:color', 'size.width', 'html', 'computedLabel', 'focused', 'selected', 'stable', 'existing', 'clickable', 'tagName', 'value'
-  propertyType?: 'attribute' | 'css' | 'jsProperty' | 'computed' | 'content' | 'location' | 'size' | 'tag' | 'text' | 'value' | 'state'; // Helps categorize property
-  attributeName?: string; // Required for getAttribute
-  cssProperty?: string; // Required for getCSSProperty
-  jsPropertyName?: string; // Required for getProperty
-  includeSelectorTag?: boolean; // Optional for getHTML
-
+  property?: string;
+  propertyType?: 'attribute' | 'css' | 'jsProperty' | 'computed' | 'content' | 'location' | 'size' | 'tag' | 'text' | 'value' | 'state';
+  attributeName?: string;
+  cssProperty?: string;
+  jsPropertyName?: string;
+  includeSelectorTag?: boolean;
   operator?: '==' | '!=' | '<' | '>' | '<=' | '>=' | 'contains' | 'not-contains' | 'exists' | 'stable' | 'clickable';
-  expectedValue?: string | number | boolean; // Value to assert against
-
-  reverse?: boolean; // For waitFor commands (e.g., wait for not visible)
-  waitTimeoutMessage?: string; // Custom message for timeout
-  checkInterval?: number; // Interval for checking condition in waitFor commands
-
-  derivedAction?: 'nextElement' | 'parentElement' | 'previousElement'; // Internal helper for derived elements
+  expectedValue?: string | number | boolean;
+  reverse?: boolean;
+  waitTimeoutMessage?: string;
+  checkInterval?: number;
+  derivedAction?: 'nextElement' | 'parentElement' | 'previousElement';
 }
 
 export interface MoveToStep extends BaseStep {
@@ -106,60 +94,58 @@ export interface MoveToStep extends BaseStep {
 
 export interface DragAndDropStep extends BaseStep {
   type: 'dragAndDrop';
-  targetSelector: string; // Selector of the element to drop onto
+  targetSelector: string;
   duration?: number;
 }
 
 export interface ExecuteScriptStep extends BaseStep {
   type: 'executeScript';
-  script: string; // The JavaScript code (as a string)
-  scriptArgs?: string; // JSON string representing arguments for the script
-  isAsync?: boolean; // Differentiates execute from executeAsync
+  script: string;
+  scriptArgs?: string;
+  isAsync?: boolean;
 }
 
 export interface IsEqualStep extends BaseStep {
   type: 'isEqual';
-  otherSelector: string; // Selector of the other element to compare with
+  otherSelector: string;
 }
 
 export interface SaveScreenshotStep extends BaseStep {
   type: 'saveScreenshot';
-  filename?: string; // Optional filename for the screenshot
+  filename?: string;
 }
 
 export interface SelectOptionStep extends BaseStep {
   type: 'selectOption';
   selectMethod: 'attribute' | 'index' | 'text';
-  attributeName?: string;   // For selectByAttribute
-  attributeValue?: string;  // For selectByAttribute
-  optionIndex?: number;     // For selectByIndex
-  visibleText?: string;     // For selectByVisibleText
+  attributeName?: string;
+  attributeValue?: string;
+  optionIndex?: number;
+  visibleText?: string;
 }
 
 export interface TouchActionStep extends BaseStep {
   type: 'touchAction';
-  touchActionArgs: string; // JSON string for touch action arguments (action for WDIO)
+  touchActionArgs: string;
 }
 
 export interface WaitUntilStep extends BaseStep {
   type: 'waitUntil';
-  conditionScript: string; // JavaScript function (as string) for the condition
-  waitUntilOptions?: string; // JSON string for options like timeout, interval etc.
+  conditionScript: string;
+  waitUntilOptions?: string;
 }
 
 export interface PauseStep extends BaseStep {
   type: 'pause';
-  duration: number; // Duration in milliseconds
+  duration: number;
 }
 
 export interface DebugStep extends BaseStep {
   type: 'debug';
-  // No specific params, just pauses execution
 }
 
 export interface UndeterminedStep extends BaseStep {
   type: 'undetermined';
-  badgeLabel?: string; // Can be set if we want to prefill badge for new undetermined steps
 }
 
 
@@ -184,7 +170,6 @@ export type Step =
   | DebugStep
   | UndeterminedStep;
 
-// Represents a saved recording session
 export interface RecordingSession {
   title: string;
   description: string;
@@ -199,8 +184,13 @@ export interface RecordingSession {
   };
 }
 
-// Types for communication between content script and popup/background
 export interface ChromeMessage {
-    type: 'TOGGLE_RECORDING' | 'ADD_STEP' | 'TOGGLE_ELEMENT_SELECTOR';
+    type: 
+      | 'TOGGLE_RECORDING' 
+      | 'ADD_STEP' 
+      | 'TOGGLE_ELEMENT_SELECTOR'
+      | 'GET_STATE'
+      | 'STATE_UPDATE'
+      | 'TOGGLE_OVERLAY';
     payload?: any;
 }

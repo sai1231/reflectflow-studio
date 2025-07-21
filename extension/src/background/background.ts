@@ -1,48 +1,82 @@
 
 import type { ChromeMessage } from '@/types';
 
-console.log("ReflectFlow background script loaded.");
+// Store the state of recording and element selector
+let isRecording = false;
+let isElementSelectorActive = false;
+let activeTabId: number | undefined = undefined;
 
-// Listen for messages from the popup
-chrome.runtime.onMessage.addListener((message: ChromeMessage, _sender, _sendResponse) => {
-    // If the message is to toggle recording or element selection, forward it to the active tab's content script
-    if (message.type === 'TOGGLE_RECORDING' || message.type === 'TOGGLE_ELEMENT_SELECTOR') {
-        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-            if (tabs[0] && tabs[0].id) {
-                chrome.tabs.sendMessage(tabs[0].id, message, (response) => {
-                    if (chrome.runtime.lastError) {
-                        console.log('Could not establish connection. The content script may not be injected yet.');
-                        // Optionally, you could retry or handle this error.
-                    } else {
-                        // Handle response from content script if needed
-                        console.log('Response from content script:', response);
-                    }
-                });
-            }
-        });
+// Function to send state to a specific tab
+function sendStateToTab(tabId: number) {
+  const message: ChromeMessage = {
+    type: 'STATE_UPDATE',
+    payload: { isRecording, isElementSelectorActive },
+  };
+  chrome.tabs.sendMessage(tabId, message, (response) => {
+    if (chrome.runtime.lastError) {
+      // This can happen if the content script is not yet injected
+      // console.log(`Could not send state to tab ${tabId}: ${chrome.runtime.lastError.message}`);
     }
+  });
+}
 
-    // If the message is to add a step, forward it to the popup UI
-    if (message.type === 'ADD_STEP') {
-        chrome.runtime.sendMessage(message);
-    }
+// Listen for messages from the popup or content scripts
+chrome.runtime.onMessage.addListener((message: ChromeMessage, sender, sendResponse) => {
+  switch (message.type) {
+    case 'TOGGLE_RECORDING':
+      isRecording = message.payload.isRecording;
+      if (activeTabId) sendStateToTab(activeTabId);
+      break;
 
-    return true; // Indicates that the response is sent asynchronously
+    case 'TOGGLE_ELEMENT_SELECTOR':
+      isElementSelectorActive = message.payload.isActive;
+      if (activeTabId) sendStateToTab(activeTabId);
+      break;
+
+    case 'GET_STATE':
+      sendResponse({ isRecording, isElementSelectorActive });
+      break;
+
+    case 'ADD_STEP':
+      // Forward the step to the active tab's UI panel
+      if (activeTabId) {
+        chrome.tabs.sendMessage(activeTabId, message);
+      }
+      break;
+    
+    case 'TOGGLE_OVERLAY':
+      if (sender.tab?.id) {
+        chrome.tabs.sendMessage(sender.tab.id, { type: 'TOGGLE_OVERLAY' });
+      }
+      break;
+  }
+  return true; // Indicates asynchronous response
 });
 
-// Listen for tab updates (e.g., navigation)
-chrome.tabs.onUpdated.addListener((_tabId, changeInfo, tab) => {
-  // When a tab completes loading a new page
-  if (changeInfo.status === 'complete' && tab.url && tab.active) {
-    // Forward a "navigate" step to the popup
-    // This is a simplified approach. A more robust solution might check if recording is active.
-    const message: ChromeMessage = {
-      type: 'ADD_STEP',
-      payload: {
-        commandKey: 'navigate',
-        url: tab.url,
-      }
-    };
-    chrome.runtime.sendMessage(message);
+// Update the active tab when the user switches tabs
+chrome.tabs.onActivated.addListener((activeInfo) => {
+  activeTabId = activeInfo.tabId;
+  // When a new tab becomes active, send it the current recording state
+  sendStateToTab(activeTabId);
+});
+
+// Handle page navigations
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  if (tabId === activeTabId && changeInfo.status === 'complete' && tab.url && isRecording) {
+      const navigateStep: ChromeMessage = {
+          type: 'ADD_STEP',
+          payload: {
+              commandKey: 'navigate',
+              url: tab.url,
+          }
+      };
+      chrome.tabs.sendMessage(tabId, navigateStep);
+  }
+});
+
+// When the extension icon is clicked, toggle the overlay in the active tab
+chrome.action.onClicked.addListener((tab) => {
+  if (tab.id) {
+    chrome.tabs.sendMessage(tab.id, { type: 'TOGGLE_OVERLAY' });
   }
 });
