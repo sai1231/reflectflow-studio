@@ -1,15 +1,17 @@
-import { ReflectFlowOverlay } from "@/components/reflect-flow/ReflectFlowOverlay";
 import Image from "next/image";
 
 export default function Home() {
   return (
     <main className="min-h-screen bg-background relative overflow-hidden">
-      {/* Mock page content below the overlay */}
+      {/* Mock page content */}
       <div className="container mx-auto px-4 py-8 relative z-0">
         <header className="mb-12 text-center">
           <h1 className="text-5xl font-bold font-headline mb-4 text-primary">Welcome to MockPage</h1>
           <p className="text-xl text-foreground/80">
-            This is a sample page content to demonstrate the ReflectFlow overlay.
+            This is a sample page to demonstrate recording actions for a browser extension.
+          </p>
+           <p className="text-lg text-muted-foreground mt-4">
+            The ReflectFlow UI has been moved to <a href="/popup" className="text-primary underline">/popup</a> to simulate its new role as an extension popup.
           </p>
         </header>
 
@@ -17,7 +19,7 @@ export default function Home() {
           <div>
             <h2 className="text-3xl font-semibold font-headline mb-4">Interactive Elements</h2>
             <p className="mb-4 text-foreground/70">
-              Try using ReflectFlow to record interactions with the elements on this page (simulation).
+              You can now imagine opening the ReflectFlow extension and recording interactions with these elements.
             </p>
             <form className="space-y-4 p-6 bg-card rounded-lg shadow-md">
               <div>
@@ -75,9 +77,6 @@ export default function Home() {
           <p className="text-sm text-muted-foreground">&copy; {new Date().getFullYear()} MockPage Inc. All rights reserved.</p>
         </footer>
       </div>
-
-      {/* ReflectFlow Overlay */}
-      <ReflectFlowOverlay />
     </main>
   );
 }
@@ -107,4 +106,3 @@ function CardTitle({ children, className, ...props }: { children: React.ReactNod
 function CardContent({ children, ...props }: { children: React.ReactNode }) {
   return <div {...props} className="p-6 pt-0">{children}</div>;
 }
-
