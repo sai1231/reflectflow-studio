@@ -12,7 +12,7 @@ function sendStateToTab(tabId: number) {
     type: 'STATE_UPDATE',
     payload: { isRecording, isElementSelectorActive },
   };
-  chrome.tabs.sendMessage(tabId, message, (response) => {
+  chrome.tabs.sendMessage(tabId, message, () => {
     if (chrome.runtime.lastError) {
       // This can happen if the content script is not yet injected
       // console.log(`Could not send state to tab ${tabId}: ${chrome.runtime.lastError.message}`);

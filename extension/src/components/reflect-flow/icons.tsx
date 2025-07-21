@@ -57,7 +57,6 @@ import {
   PauseCircle,
   Bug,
   Download as LucideDownload,
-  Move as MoveIcon,
 } from 'lucide-react';
 
 export const RecordIcon = CircleDot;

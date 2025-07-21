@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useCallback, useEffect, useRef } from 'react';
-import type { Step, UndeterminedStep, RecordingSession, ChromeMessage } from '@/types';
+import type { Step, UndeterminedStep, ChromeMessage } from '@/types';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { HeaderControls } from './HeaderControls';
