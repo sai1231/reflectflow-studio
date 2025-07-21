@@ -16,20 +16,11 @@ export default defineConfig({
       '@': resolve(__dirname, './src'),
     }
   },
+  // By removing the manual `build.rollupOptions`, we let the crxjs plugin
+  // automatically handle the entry points based on the manifest.json file,
+  // which is the correct way to use this plugin.
   build: {
     outDir: 'dist',
     emptyOutDir: true,
-    rollupOptions: {
-      input: {
-        // No popup entry, CRXjs handles it via manifest
-        content: resolve(__dirname, 'src/content/content.tsx'),
-        background: resolve(__dirname, 'src/background/background.ts'),
-      },
-      output: {
-        entryFileNames: '[name].js',
-        chunkFileNames: 'chunks/[name]-[hash].js',
-        assetFileNames: 'assets/[name]-[hash][extname]',
-      }
-    }
   }
 });
