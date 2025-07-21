@@ -4,7 +4,7 @@ import type { ChromeMessage } from '@/types';
 console.log("ReflectFlow background script loaded.");
 
 // Listen for messages from the popup
-chrome.runtime.onMessage.addListener((message: ChromeMessage, sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((message: ChromeMessage, _sender, _sendResponse) => {
     // If the message is to toggle recording or element selection, forward it to the active tab's content script
     if (message.type === 'TOGGLE_RECORDING' || message.type === 'TOGGLE_ELEMENT_SELECTOR') {
         chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
@@ -31,7 +31,7 @@ chrome.runtime.onMessage.addListener((message: ChromeMessage, sender, sendRespon
 });
 
 // Listen for tab updates (e.g., navigation)
-chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+chrome.tabs.onUpdated.addListener((_tabId, changeInfo, tab) => {
   // When a tab completes loading a new page
   if (changeInfo.status === 'complete' && tab.url && tab.active) {
     // Forward a "navigate" step to the popup

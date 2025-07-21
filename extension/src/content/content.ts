@@ -1,5 +1,5 @@
 
-import type { ChromeMessage, Step } from '@/types';
+import type { ChromeMessage, SelectOptionStep, Step, TypeStep, NavigateStep } from '@/types';
 import { findCommandByKey } from '@/lib/commands';
 
 console.log("ReflectFlow content script loaded.");
@@ -7,7 +7,6 @@ console.log("ReflectFlow content script loaded.");
 let isRecording = false;
 let isElementSelectorActive = false;
 let focusedElement: { element: HTMLInputElement | HTMLTextAreaElement, value: string } | null = null;
-let lastClickedElement: HTMLElement | null = null;
 
 
 // Function to generate unique step ID
@@ -83,13 +82,13 @@ function createStep(commandKey: string, element?: HTMLElement, value?: any): Par
     };
     
     if (commandKey === 'setValue' && value !== undefined) {
-        step.value = value;
+        (step as Partial<TypeStep>).value = value;
     }
     if (commandKey === 'selectByVisibleText' && value !== undefined) {
-        step.visibleText = value;
+        (step as Partial<SelectOptionStep>).visibleText = value;
     }
     if (commandKey === 'navigate' && value !== undefined) {
-        step.url = value;
+        (step as Partial<NavigateStep>).url = value;
     }
 
 
@@ -114,7 +113,6 @@ function handleClick(event: MouseEvent) {
     // Avoid capturing clicks inside the extension UI if it's an overlay
     if (target.closest('#reflectflow-extension-root')) return;
 
-    lastClickedElement = target;
     const step = createStep('click', target);
     sendStepToPopup(step);
 }
@@ -130,9 +128,11 @@ function handleFocusIn(event: FocusEvent) {
 function handleFocusOut(event: FocusEvent) {
     if (!isRecording || !focusedElement) return;
     const target = event.target;
-    if (target === focusedElement.element && target.value !== focusedElement.value) {
-        const step = createStep('setValue', focusedElement.element, target.value);
-        sendStepToPopup(step);
+    if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) {
+        if (target === focusedElement.element && target.value !== focusedElement.value) {
+            const step = createStep('setValue', focusedElement.element, target.value);
+            sendStepToPopup(step);
+        }
     }
     focusedElement = null;
 }
@@ -166,7 +166,7 @@ function removeListeners() {
 
 
 // Listen for messages from the background script
-chrome.runtime.onMessage.addListener((message: ChromeMessage, sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((message: ChromeMessage, _sender, sendResponse) => {
     if (message.type === 'TOGGLE_RECORDING') {
         isRecording = message.payload.isRecording;
         if (isRecording) {

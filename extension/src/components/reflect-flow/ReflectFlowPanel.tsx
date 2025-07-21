@@ -24,7 +24,7 @@ export function ReflectFlowPanel() {
 
   // Effect to listen for messages from the background script (e.g., new steps)
   useEffect(() => {
-    const messageListener = (message: ChromeMessage, sender: chrome.runtime.MessageSender) => {
+    const messageListener = (message: ChromeMessage, _sender: chrome.runtime.MessageSender) => {
       if (message.type === 'ADD_STEP' && message.payload) {
         
         const command = findCommandByKey(message.payload.commandKey);
@@ -187,7 +187,7 @@ export function ReflectFlowPanel() {
     toast({ title: "Steps Reordered", description: "The order of the steps has been updated." });
   }, [toast]);
 
-  const handleInitiateSelectorPick = useCallback((stepId: string) => {
+  const handleInitiateSelectorPick = useCallback((_stepId: string) => {
     toast({ title: "Pick an Element", description: "This would activate picking mode on the page." });
   }, [toast]);
 

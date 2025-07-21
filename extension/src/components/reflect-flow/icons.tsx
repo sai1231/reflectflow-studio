@@ -1,6 +1,5 @@
 
 import {
-  Mic,
   Pause,
   Play,
   Edit3,

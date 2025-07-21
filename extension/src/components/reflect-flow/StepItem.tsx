@@ -326,7 +326,7 @@ export function StepItem({ step, initialExpanded = false, onUpdateStep, onDelete
     else if (s.type === 'type' && 'value' in s) summaryText = `Type: "${s.value || '...'}" into ${primarySelectorDisplay || 'element'}`;
     else if (s.type === 'scroll' && 'scrollType' in s && s.scrollType === 'window') summaryText = `Scroll window to X:${(s as any).x ?? 0}, Y:${(s as any).y ?? 0}`;
     else if (primarySelectorDisplay && (s.description || s.badgeLabel)) summaryText = `${s.description || s.badgeLabel} on ${primarySelectorDisplay}`;
-    else if (s.description || s.badgeLabel) summaryText = s.description || s.badgeLabel;
+    else if (s.description || s.badgeLabel) summaryText = s.description || s.badgeLabel || '';
 
     return <p className="text-xs text-muted-foreground truncate" title={summaryText}>{summaryText}</p>;
   };
