@@ -1,42 +1,42 @@
-
 {
   "manifest_version": 3,
   "name": "ReflectFlow",
-  "version": "0.1.0",
-  "description": "Record and playback user interactions on any website.",
+  "version": "1.0",
+  "description": "Record and replay browser interactions.",
   "permissions": [
-    "storage",
-    "activeTab",
     "tabs",
+    "activeTab",
+    "storage",
     "scripting"
   ],
   "host_permissions": [
     "<all_urls>"
   ],
-  "action": {
-    "default_title": "Toggle ReflectFlow Panel",
-    "default_icon": {
-      "16": "icons/icon16.png",
-      "48": "icons/icon48.png",
-      "128": "icons/icon128.png"
-    }
-  },
   "background": {
-    "service_worker": "background.js",
+    "service_worker": "src/background/background.ts",
     "type": "module"
   },
   "content_scripts": [
     {
-      "matches": ["<all_urls>"],
-      "js": ["content.js"],
-      "css": ["content.css"],
-      "run_at": "document_idle"
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "src/content/content.tsx"
+      ]
     }
   ],
+  "action": {
+    "default_title": "ReflectFlow"
+  },
   "web_accessible_resources": [
     {
-      "resources": ["assets/*"],
-      "matches": ["<all_urls>"]
+      "resources": [
+        "assets/*"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
     }
   ]
 }
