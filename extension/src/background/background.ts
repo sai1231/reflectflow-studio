@@ -1,3 +1,4 @@
+
 import type { ChromeMessage } from '@/types';
 
 // Store the state of recording and element selector
@@ -20,7 +21,7 @@ function sendStateToTab(tabId: number) {
 }
 
 // Listen for messages from the popup or content scripts
-chrome.runtime.onMessage.addListener((message: ChromeMessage, sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((message: ChromeMessage, sender: chrome.runtime.MessageSender, sendResponse: (response?: any) => void) => {
   switch (message.type) {
     case 'TOGGLE_RECORDING':
       isRecording = message.payload.isRecording;
@@ -53,7 +54,7 @@ chrome.runtime.onMessage.addListener((message: ChromeMessage, sender, sendRespon
 });
 
 // Update the active tab when the user switches tabs
-chrome.tabs.onActivated.addListener((activeInfo) => {
+chrome.tabs.onActivated.addListener((activeInfo: chrome.tabs.TabActiveInfo) => {
   activeTabId = activeInfo.tabId;
   // When a new tab becomes active, send it the current recording state
   if (activeTabId) {
@@ -62,7 +63,7 @@ chrome.tabs.onActivated.addListener((activeInfo) => {
 });
 
 // Handle page navigations
-chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+chrome.tabs.onUpdated.addListener((tabId: number, changeInfo: chrome.tabs.TabChangeInfo, tab: chrome.tabs.Tab) => {
   if (tabId === activeTabId && changeInfo.status === 'complete' && tab.url && isRecording) {
       const navigateStep: ChromeMessage = {
           type: 'ADD_STEP',
@@ -76,7 +77,13 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
 });
 
 // When the extension icon is clicked, inject a script to toggle the overlay
-chrome.action.onClicked.addListener((tab) => {
+chrome.action.onClicked.addListener((tab: chrome.tabs.Tab) => {
+  // Guard against running on protected URLs
+  if (tab.url && (tab.url.startsWith('chrome://') || tab.url.startsWith('edge://'))) {
+    console.log("ReflectFlow cannot run on protected browser pages.");
+    return;
+  }
+  
   if (tab.id) {
     chrome.scripting.executeScript({
       target: { tabId: tab.id },
