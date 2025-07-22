@@ -1,4 +1,3 @@
-
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { ReflectFlowPanel } from '@/components/reflect-flow/ReflectFlowPanel';
@@ -263,11 +262,14 @@ function removeListeners() {
 }
 
 // --- Message Handling ---
-chrome.runtime.onMessage.addListener((message: ChromeMessage, _sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((message: ChromeMessage, sender, sendResponse) => {
+  // Check if the message is from the background script's injected function
+  if (message.type === 'TOGGLE_OVERLAY' && sender.id === chrome.runtime.id) {
+    toggleOverlay();
+    return;
+  }
+  
   switch (message.type) {
-    case 'TOGGLE_OVERLAY':
-        toggleOverlay();
-        break;
     case 'STATE_UPDATE':
       const { isRecording: newIsRecording, isElementSelectorActive: newIsSelectorActive } = message.payload;
       

@@ -1,4 +1,3 @@
-
 import type { ChromeMessage } from '@/types';
 
 // Store the state of recording and element selector
@@ -76,9 +75,16 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   }
 });
 
-// When the extension icon is clicked, toggle the overlay in the active tab
+// When the extension icon is clicked, inject a script to toggle the overlay
 chrome.action.onClicked.addListener((tab) => {
   if (tab.id) {
-    chrome.tabs.sendMessage(tab.id, { type: 'TOGGLE_OVERLAY' });
+    chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: () => {
+        // This function is executed in the content script's context
+        // We send a message to our own content script to toggle the UI
+        chrome.runtime.sendMessage({ type: 'TOGGLE_OVERLAY' });
+      }
+    }).catch(err => console.error("Failed to execute script: ", err));
   }
 });

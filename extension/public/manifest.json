@@ -1,17 +1,17 @@
 {
   "manifest_version": 3,
   "name": "ReflectFlow",
-  "version": "1.0",
-  "description": "Record and replay browser interactions.",
+  "version": "0.1.0",
+  "description": "Record and playback browser interactions.",
   "permissions": [
-    "tabs",
-    "activeTab",
     "storage",
+    "activeTab",
+    "tabs",
     "scripting"
   ],
-  "host_permissions": [
-    "<all_urls>"
-  ],
+  "action": {
+    "default_title": "ReflectFlow"
+  },
   "background": {
     "service_worker": "src/background/background.ts",
     "type": "module"
@@ -23,20 +23,8 @@
       ],
       "js": [
         "src/content/content.tsx"
-      ]
-    }
-  ],
-  "action": {
-    "default_title": "ReflectFlow"
-  },
-  "web_accessible_resources": [
-    {
-      "resources": [
-        "assets/*"
       ],
-      "matches": [
-        "<all_urls>"
-      ]
+      "run_at": "document_end"
     }
   ]
 }
