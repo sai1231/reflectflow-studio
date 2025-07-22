@@ -265,7 +265,7 @@ function removeListeners() {
 // --- Message Handling ---
 chrome.runtime.onMessage.addListener((message: ChromeMessage, _sender, sendResponse) => {
   switch (message.type) {
-    case 'TOGGLE_OVERLAY_REQUEST':
+    case 'TOGGLE_OVERLAY':
         toggleOverlay();
         break;
     case 'STATE_UPDATE':
