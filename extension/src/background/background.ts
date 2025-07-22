@@ -45,8 +45,9 @@ chrome.runtime.onMessage.addListener((message: ChromeMessage, sender, sendRespon
       break;
     
     case 'TOGGLE_OVERLAY':
+      // This is now initiated by the content script, but we can keep this for potential future use
       if (sender.tab?.id) {
-        chrome.tabs.sendMessage(sender.tab.id, { type: 'TOGGLE_OVERLAY' });
+        chrome.tabs.sendMessage(sender.tab.id, { type: 'TOGGLE_OVERLAY_ACTION' });
       }
       break;
   }
@@ -57,7 +58,9 @@ chrome.runtime.onMessage.addListener((message: ChromeMessage, sender, sendRespon
 chrome.tabs.onActivated.addListener((activeInfo) => {
   activeTabId = activeInfo.tabId;
   // When a new tab becomes active, send it the current recording state
-  sendStateToTab(activeTabId);
+  if (activeTabId) {
+    sendStateToTab(activeTabId);
+  }
 });
 
 // Handle page navigations
@@ -74,9 +77,11 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   }
 });
 
-// When the extension icon is clicked, toggle the overlay in the active tab
+// When the extension icon is clicked, toggle a value in storage.
+// The content script will listen for this change.
 chrome.action.onClicked.addListener((tab) => {
-  if (tab.id) {
-    chrome.tabs.sendMessage(tab.id, { type: 'TOGGLE_OVERLAY' });
-  }
+    if (tab.id) {
+        // The content script will pick up this change and toggle the UI
+        chrome.tabs.sendMessage(tab.id, { type: 'TOGGLE_OVERLAY_REQUEST' });
+    }
 });
