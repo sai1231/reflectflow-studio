@@ -2,8 +2,16 @@
   "manifest_version": 3,
   "name": "ReflectFlow",
   "version": "0.1.0",
-  "description": "A browser extension to record and playback UI interactions.",
-  "permissions": ["tabs", "activeTab", "storage"],
+  "description": "A browser extension to record and playback user interactions.",
+  "permissions": [
+    "storage",
+    "activeTab",
+    "tabs",
+    "scripting"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
   "action": {
     "default_title": "ReflectFlow"
   },
@@ -13,8 +21,17 @@
   },
   "content_scripts": [
     {
-      "matches": ["<all_urls>"],
-      "js": ["src/content/content.tsx"]
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "src/content/content.tsx"
+      ]
     }
-  ]
+  ],
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
 }
